@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=75", "wheel", "setuptools-scm[toml]>=6.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "moonfish"
+dynamic = ["version"]
+readme = "README.md"
+description = "Moonfish is a didactic Python chess engine showcasing parallel search algorithms and modern chess programming techniques."
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+authors = [
+  {name = "Lucca Bertoncini", email = "luccabazzo@gmail.com"},
+]
+dependencies = []
+
+[project.scripts]
+moonfish = "moonfish.main:main"
+
+[tool.setuptools]
+packages = ["moonfish"]
+
+[tool.setuptools.package-data]
+"moonfish" = ["py.typed"]
+
+[project.urls]
+Homepage = "https://github.com/luccabb/moonfish"
+Issues = "https://github.com/luccabb/moonfish/issues"

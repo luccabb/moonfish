@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.10', '3.11', '3.12']
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Miniconda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+        auto-update-conda: true
+        activate-environment: moonfish-test
+        environment-file: false
+
+    - name: Install dependencies
+      shell: bash -l {0}
+      run: |
+        conda install pip
+        pip install -r requirements.txt
+
+    - name: Install moonfish package
+      shell: bash -l {0}
+      run: |
+        pip install -e .
+
+    - name: Test moonfish import
+      shell: bash -l {0}
+      run: |
+        python -c "import moonfish"
+        python -c "import moonfish; import chess; board = chess.Board(); move = moonfish.search_move(board)"
+
+    - name: Test CLI functionality
+      shell: bash -l {0}
+      run: |
+        moonfish --help
+
+    - name: Run unit tests
+      shell: bash -l {0}
+      run: |
+        python -m unittest tests/test.py
+
+  format:
+    name: Import Sorting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install ufmt
+        run: pip install ufmt
+      
+      - name: Run ufmt
+        run: ufmt .
+
+  lint:
+    name: Flake8 Linting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install Flake8
+        run: |
+          pip install flake8 flake8-docstrings flake8-bugbear
+      
+      - name: Run Flake8
+        run: flake8 .
+
+  typecheck:
+    name: Type Checking
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run mypy
+        run: mypy .

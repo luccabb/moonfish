@@ -2,13 +2,12 @@ from random import choice
 
 from chess import Board
 
-from config import Config
+from moonfish.config import Config
 
 
 class RandomEngine:
 
-    def __init__(self, _: Config):
-        ...
+    def __init__(self, _: Config): ...
 
     def search_move(self, board: Board) -> str:
         """

@@ -12,6 +12,7 @@ class Config:
     """
     Configuration for the engine.
     """
+
     mode: str
     algorithm: str
     negamax_depth: int

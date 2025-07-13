@@ -1,9 +1,10 @@
 # flake8: noqa
 from typing import List, Tuple
 
-from config import Config
 import chess
 import chess.syzygy
+
+from moonfish.config import Config
 
 ############
 # I'm using Pesto Evaluation function:
@@ -188,12 +189,18 @@ TOTAL_PHASE = (
 )
 
 PHASE_VALUES = [
-    PAWN_PHASE, PAWN_PHASE,
-    KNIGHT_PHASE, KNIGHT_PHASE,
-    BISHOP_PHASE, BISHOP_PHASE,
-    ROOK_PHASE, ROOK_PHASE,
-    QUEEN_PHASE, QUEEN_PHASE
+    PAWN_PHASE,
+    PAWN_PHASE,
+    KNIGHT_PHASE,
+    KNIGHT_PHASE,
+    BISHOP_PHASE,
+    BISHOP_PHASE,
+    ROOK_PHASE,
+    ROOK_PHASE,
+    QUEEN_PHASE,
+    QUEEN_PHASE,
 ]
+
 
 def count_pieces(board: chess.Board) -> List[int]:
     """
@@ -253,6 +260,8 @@ def get_phase(board: chess.Board) -> float:
 
 
 BOARD_EVALUATION_CACHE = {}
+
+
 def board_evaluation_cache(fun):
 
     def inner(board: chess.Board):
@@ -260,6 +269,7 @@ def board_evaluation_cache(fun):
         if key not in BOARD_EVALUATION_CACHE:
             BOARD_EVALUATION_CACHE[key] = fun(board)
         return BOARD_EVALUATION_CACHE[key]
+
     return inner
 
 
@@ -306,12 +316,10 @@ def board_evaluation(board: chess.Board) -> float:
             )
         if piece.color == chess.BLACK:
             mg[piece.color] += (
-                MG_PESTO[piece.piece_type][square]
-                + MG_PIECE_VALUES[piece.piece_type]
+                MG_PESTO[piece.piece_type][square] + MG_PIECE_VALUES[piece.piece_type]
             )
             eg[piece.color] += (
-                EG_PESTO[piece.piece_type][square]
-                + EG_PIECE_VALUES[piece.piece_type]
+                EG_PESTO[piece.piece_type][square] + EG_PIECE_VALUES[piece.piece_type]
             )
 
     # calculate board score based on phase
@@ -385,8 +393,8 @@ def evaluate_capture(board: chess.Board, move: chess.Move, phase: float) -> floa
         capturing_piece = chess.PAWN
         captured_piece = chess.PAWN
     else:
-        capturing_piece = board.piece_at(move.from_square).piece_type # type: ignore
-        captured_piece = board.piece_at(move.to_square).piece_type # type: ignore
+        capturing_piece = board.piece_at(move.from_square).piece_type  # type: ignore
+        captured_piece = board.piece_at(move.to_square).piece_type  # type: ignore
 
     # get mid and end game difference of scores between captured
     # and capturing piece

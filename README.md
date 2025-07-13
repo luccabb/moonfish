@@ -8,6 +8,57 @@ Moonfish is a didactic Python chess engine designed to showcase parallel search 
 
 The engine achieves approximately ~2000 Elo when playing against Lichess Stockfish bots (beats level 5 and loses to level 6) and includes comprehensive test suites including the Bratko-Kopec tactical test positions.
 
+# Quickstart
+
+## Requirements
+- Python 3.10
+
+## Installation and usage
+Install the python library:
+```shell
+pip install moonfish
+```
+
+From python:
+```python
+$ python
+>>> import chess
+>>> import moonfish
+>>> board = chess.Board()
+>>> moonfish.search_move(board)
+Move.from_uci('g1f3')
+```
+
+You can also call the CLI, the CLI works as an [UCI](http://wbec-ridderkerk.nl/html/UCIProtocol.html) Compatible Engine:
+```shell
+$ moonfish --mode=uci
+uci # <- user input
+id name Moonfish
+id author luccabb
+uciok
+```
+
+You can also run it as an API:
+```shell
+moonfish --mode=api
+```
+
+Then send a request:
+```shell
+$ curl "http://localhost:5000/?fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR%20w%20KQkq%20-%200%201&depth=4&quiescence_search_depth=3&null_move=True&null_move_r=2&algorithm=alpha_beta"
+{
+  "body": {
+    "move": "e2e4"
+  },
+  "headers": {
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "OPTIONS,GET",
+    "Access-Control-Allow-Origin": "*"
+  },
+  "statusCode": 200
+}
+```
+
 ## Features
 
 ### Search Algorithms
@@ -29,58 +80,13 @@ The engine achieves approximately ~2000 Elo when playing against Lichess Stockfi
 - **Web API** - RESTful interface for online integration
 - **Lichess Bot** - Ready for deployment on Lichess.org
 
-## Installing dependencies
-
-```bash
-git clone https://github.com/luccabb/moonfish.git
-cd moonfish
-pip install -r requirements.txt
-```
-## Running the Engine
-
-### 1. Running as an [UCI](http://wbec-ridderkerk.nl/html/UCIProtocol.html) Compatible Engine
-
-```shell
-# to get available options
-$ python main.py --help
-# starts the engine with default options
-$ python main.py
-```
-
-### 2. Running as a Web Server
-
-```
-python api.py
-```
-
-## Running Tests
-
-
-### Unit Tests
-
-Unit tests are testing the basic functionality of the engine,
-with key positions and moves.
-
-```
-python -m unittest tests/test.py
-```
-
-### [Bratko-Kopec Test](https://www.chessprogramming.org/Bratko-Kopec_Test)
-
-[Bratko-Kopec](https://www.chessprogramming.org/Bratko-Kopec_Test) tests the engine
-performance in terms of time and strenght.
-
-```
-python -m tests.test_bratko_kopec
-```
-
 ## Lichess-bot Python Bridge
 
 This engine implements the UCI protocol and can be used as a bot on [Lichess](https://lichess.org). You can use the python bridge between Lichess Bot API and the engine: [https://github.com/ShailChoksi/lichess-bot](https://github.com/ShailChoksi/lichess-bot).
 
 To run it as a bot you'll need to produce a python executable. [PyInstaller](https://pyinstaller.readthedocs.io/en/stable/) can produce it by running the following command:
 
-```
+```shell
 python3 -m PyInstaller main.py
 ```
 
@@ -118,6 +124,7 @@ We welcome contributions, feel free to open PRs/Issues! Areas of interest:
 - [Lazy SMP Algorithm](https://www.chessprogramming.org/Lazy_SMP)
 - [UCI Protocol Specification](http://wbec-ridderkerk.nl/html/UCIProtocol.html)
 - [Rofchade](https://talkchess.com/viewtopic.php?t=68311&start=19)
+- [THE BRATKO-KOPEC TEST RECALIBRATED](https://www.sci.brooklyn.cuny.edu/~kopec/Publications/THE%20BRATKO-KOPEC%20TEST%20RECALIBRATED.htm)
 
 ## License
 

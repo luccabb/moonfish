@@ -1,14 +1,14 @@
 from collections import defaultdict
 from copy import copy
+from functools import partial
 from multiprocessing import Manager, Pool, cpu_count
 from multiprocessing.managers import DictProxy
 from typing import List, Tuple
-from config import Config
-from functools import partial
 
 from chess import Board
 
-from engines.alpha_beta import AlphaBeta
+from moonfish.config import Config
+from moonfish.engines.alpha_beta import AlphaBeta
 
 
 def LAYER_SIGNAL_CORRECTION(data):
@@ -16,11 +16,7 @@ def LAYER_SIGNAL_CORRECTION(data):
 
 
 def CHECKMATE_CORRECTION(data, threshold):
-    return (
-        (data[0] + 1, *data[1:])
-        if (data[0] > threshold and data[3] == 1)
-        else data
-    )
+    return (data[0] + 1, *data[1:]) if (data[0] > threshold and data[3] == 1) else data
 
 
 class Layer2ParallelAlphaBeta(AlphaBeta):
@@ -28,9 +24,12 @@ class Layer2ParallelAlphaBeta(AlphaBeta):
     This class implements a parallel search
     algorithm starting from the second layer.
     """
+
     def __init__(self, config: Config):
         super().__init__(config)
-        self.checkmate_correction = partial(CHECKMATE_CORRECTION, threshold=self.config.checkmate_threshold)
+        self.checkmate_correction = partial(
+            CHECKMATE_CORRECTION, threshold=self.config.checkmate_threshold
+        )
 
     def generate_board_and_moves(
         self, og_board: Board, board_to_move_that_generates_it: DictProxy, layer: int
@@ -101,7 +100,12 @@ class Layer2ParallelAlphaBeta(AlphaBeta):
             board_list = [board for board in sum(processes, [])]
 
         negamax_arguments = [
-            (board, copy(self.config.negamax_depth) - START_LAYER, self.config.null_move, shared_cache)
+            (
+                board,
+                copy(self.config.negamax_depth) - START_LAYER,
+                self.config.null_move,
+                shared_cache,
+            )
             for board, _, _ in board_list
         ]
 
