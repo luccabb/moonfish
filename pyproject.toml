@@ -12,7 +12,18 @@ license = {file = "LICENSE"}
 authors = [
   {name = "Lucca Bertoncini", email = "luccabazzo@gmail.com"},
 ]
-dependencies = []
+dependencies = [
+  "chess",
+  "click",
+  "Flask",
+  "Flask-Cors",
+  "parameterized",
+  "pyinstaller",
+  "mypy",
+  "flake8",
+  "black",
+  "isort",
+]
 
 [project.scripts]
 moonfish = "moonfish.main:main"
