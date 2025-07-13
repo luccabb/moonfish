@@ -101,6 +101,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
+          mypy --install-types
 
       - name: Run mypy
         run: mypy .

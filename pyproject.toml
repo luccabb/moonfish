@@ -23,6 +23,7 @@ dependencies = [
   "flake8",
   "black",
   "isort",
+  "ufmt",
 ]
 
 [project.scripts]
