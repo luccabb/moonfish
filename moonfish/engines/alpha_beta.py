@@ -255,10 +255,12 @@ class AlphaBeta:
         cache[cache_key] = (best_score, best_move)
         return best_score, best_move
 
-    def search_move(self, board: Board) -> Optional[str]:
+    def search_move(self, board: Board) -> str:
         # create shared cache
         cache: CACHE_KEY = {}
 
-        return self.negamax(
+        best_move = self.negamax(
             board, copy(self.config.negamax_depth), self.config.null_move, cache
         )[1]
+        assert best_move is not None, "Best move from root should not be None"
+        return best_move

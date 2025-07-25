@@ -78,19 +78,7 @@ $ curl "http://localhost:5000/?fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR%2
 ### Engine Interfaces
 - **UCI Protocol** - Compatible with popular chess GUIs
 - **Web API** - RESTful interface for online integration
-- **Lichess Bot** - Ready for deployment on Lichess.org
-
-## Lichess-bot Python Bridge
-
-This engine implements the UCI protocol and can be used as a bot on [Lichess](https://lichess.org). You can use the python bridge between Lichess Bot API and the engine: [https://github.com/ShailChoksi/lichess-bot](https://github.com/ShailChoksi/lichess-bot).
-
-To run it as a bot you'll need to produce a python executable. [PyInstaller](https://pyinstaller.readthedocs.io/en/stable/) can produce it by running the following command:
-
-```shell
-python3 -m PyInstaller main.py
-```
-
-This creates a `build` and `dist` folder. The `dist` folder contains the main executable in a folder called `main`. All the files inside `main` need to be copied over to `/lichess-bot/engines` for it to work. You can checkout [/lichess](lichess/README.md) for further lichess setup.
+- **Lichess Bot** - Ready for deployment on [Lichess.org](/CONTRIBUTING.md#lichess-bot-python-bridge)
 
 ## Configuration Options
 

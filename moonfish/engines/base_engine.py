@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Optional, Protocol
+from typing import Protocol
 
 from chess import Board
 
@@ -20,7 +20,7 @@ class ChessEngine(Protocol):
     def __init__(self, config: Config): ...
 
     @abstractmethod
-    def search_move(self, board: Board) -> Optional[str]:
+    def search_move(self, board: Board) -> str:
         """
         We'll search for the best possible move in the board that we're
         receiving up to a given depth.
