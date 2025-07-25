@@ -1,6 +1,6 @@
 import sys
 
-from chess import STARTING_FEN, Board
+from chess import Board, STARTING_FEN
 
 from moonfish.config import Config
 from moonfish.helper import find_best_move, get_engine

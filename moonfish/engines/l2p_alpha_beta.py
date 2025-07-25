@@ -1,7 +1,7 @@
 from collections import defaultdict
 from copy import copy
 from functools import partial
-from multiprocessing import Manager, Pool, cpu_count
+from multiprocessing import cpu_count, Manager, Pool
 from multiprocessing.managers import DictProxy
 from typing import List, Tuple
 
