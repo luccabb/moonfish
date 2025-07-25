@@ -1,9 +1,9 @@
 import sys
 
-from chess import STARTING_FEN, Board, polyglot
+from chess import Board, STARTING_FEN
 
-from helper import get_engine
-from config import Config
+from moonfish.config import Config
+from moonfish.helper import find_best_move, get_engine
 
 # UCI based on Sunfish Engine: https://github.com/thomasahle/sunfish/blob/master/uci.py
 
@@ -67,17 +67,8 @@ def main(config: Config):
                 board.push_uci(move)
 
         elif uci_command.startswith("go"):
-
-            # try using cerebellum opening book: https://zipproth.de/Brainfish/download/
-            # if it fails we search on our engine. The first (12-20) moves should be
-            # available in the opening book, so our engine starts playing after that.
-            try:
-                best_move = (
-                    polyglot.MemoryMappedReader("opening_book/cerebellum.bin")
-                    .find(board)
-                    .move
-                    .uci()
-                )
-            except:
-                best_move = engine.search_move(board)
+            best_move = find_best_move(
+                board=board,
+                engine=engine,
+            )
             print(f"bestmove {best_move}")

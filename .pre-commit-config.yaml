@@ -4,10 +4,12 @@ repos:
     hooks:
     - id: black
       language_version: python3.10
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
+  - repo: https://github.com/omnilib/ufmt
+    rev: v2.8.0
     hooks:
-      - id: isort
+      - id: ufmt
+        additional_dependencies:
+          - usort == 1.0.4
   - repo: https://github.com/pycqa/flake8
     rev: 7.0.0
     hooks:

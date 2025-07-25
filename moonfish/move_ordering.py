@@ -2,14 +2,14 @@ import random
 
 from chess import BLACK, Board, Move
 
-from psqt import evaluate_capture, evaluate_piece, get_phase
+from moonfish.psqt import evaluate_capture, evaluate_piece, get_phase
 
 
 def organize_moves(board: Board):
     """
     This function receives a board and it returns a list of all the
     possible moves for the current player, sorted by importance.
-    It sends capturing moves at the starting positions in 
+    It sends capturing moves at the starting positions in
     the array (to try to increase pruning and do so earlier).
 
     Arguments:

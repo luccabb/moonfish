@@ -2,19 +2,19 @@ import ast
 from multiprocessing import set_start_method
 from typing import Any, Dict
 
-from chess import Board, polyglot
+from chess import Board, Move
 from flask import Flask, request
-from config import Config
 from flask_cors import CORS, cross_origin
 
-from helper import get_engine
+from moonfish.config import Config
+from moonfish.helper import find_best_move, get_engine
 
 app = Flask(__name__)
 cors = CORS(app)
 app.config["CORS_HEADER"] = "Content-Type"
 
 
-def format_response(best_move: str) -> Dict[str, Any]:
+def format_response(best_move: Move) -> Dict[str, Any]:
     """
     Format the response to be sent back to the client.
 
@@ -67,6 +67,8 @@ def main_search() -> Dict[str, Any]:
     null_move = ast.literal_eval(str(request.args.get("null_move")))
     null_move_r = int(request.args.get("null_move_r", 2))
     algorithm = request.args.get("algorithm", "alpha_beta")
+    syzygy_path = request.args.get("syzygy_path")
+    syzygy_pieces = request.args.get("syzygy_pieces", "5")
 
     config = Config(
         mode="api",
@@ -74,26 +76,19 @@ def main_search() -> Dict[str, Any]:
         negamax_depth=depth,
         null_move=null_move,
         null_move_r=null_move_r,
-        quiescence_search_depth=quiescence_search_depth
+        quiescence_search_depth=quiescence_search_depth,
+        syzygy_path=syzygy_path,
+        syzygy_pieces=int(syzygy_pieces),
     )
 
     # create the board
     board = Board(fen)
+    engine = get_engine(config)
 
-    # try using cerebellum opening book: https://zipproth.de/Brainfish/download/
-    # if it fails we search on our engine. The first (12-20) moves should be
-    # available in the opening book, so our engine starts playing after that.
-    try:
-        best_move = (
-            polyglot.MemoryMappedReader("opening_book/cerebellum.bin")
-            .find(board)
-            .move
-            .uci()
-        )
-    except:
-        engine = get_engine(config)
-        best_move = engine.search_move(board).uci()
-
+    best_move = find_best_move(
+        board=board,
+        engine=engine,
+    )
     return format_response(best_move)
 
 

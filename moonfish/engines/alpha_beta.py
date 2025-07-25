@@ -1,22 +1,25 @@
-from typing import Optional, Tuple, Dict
-from multiprocessing.managers import DictProxy
 from copy import copy
+from multiprocessing.managers import DictProxy
+from typing import Dict, Optional, Tuple
+
+import chess.syzygy
 from chess import Board, Move
 
-from config import Config
-from move_ordering import organize_moves, organize_moves_quiescence
-from psqt import board_evaluation, count_pieces
-from random import choice
-import chess.syzygy
+from moonfish.config import Config
+from moonfish.engines.random import choice
+from moonfish.move_ordering import organize_moves, organize_moves_quiescence
+from moonfish.psqt import board_evaluation, count_pieces
 
-
-CACHE_KEY = Dict[Tuple[str, int, bool, float, float], Tuple[float | int, Optional[str]]]
+CACHE_KEY = Dict[
+    Tuple[str, int, bool, float, float], Tuple[float | int, Optional[Move]]
+]
 
 
 class AlphaBeta:
     """
     A class that implements alpha-beta search algorithm.
     """
+
     def __init__(self, config: Config):
         self.config = config
 
@@ -49,7 +52,11 @@ class AlphaBeta:
         return board_evaluation(board)
 
     def quiescence_search(
-        self, board: Board, depth: int, alpha: float, beta: float,
+        self,
+        board: Board,
+        depth: int,
+        alpha: float,
+        beta: float,
     ) -> float:
         """
         This functions extends our search for important
@@ -99,7 +106,8 @@ class AlphaBeta:
                 board=board,
                 depth=depth - 1,
                 alpha=-beta,
-                beta=-alpha,)
+                beta=-alpha,
+            )
             board.pop()
 
             # beta-cutoff
@@ -119,7 +127,7 @@ class AlphaBeta:
         cache: DictProxy | CACHE_KEY,
         alpha: float = float("-inf"),
         beta: float = float("inf"),
-    ) -> Tuple[float | int, Optional[str]]:
+    ) -> Tuple[float | int, Optional[Move]]:
         """
         This functions receives a board, depth and a player; and it returns
         the best move for the current board based on how many depths we're looking ahead
@@ -175,7 +183,11 @@ class AlphaBeta:
             return board_score, None
 
         # null move prunning
-        if self.config.null_move and depth >= (self.config.null_move_r + 1) and not board.is_check():
+        if (
+            self.config.null_move
+            and depth >= (self.config.null_move_r + 1)
+            and not board.is_check()
+        ):
             board_score = self.eval_board(board)
             if board_score >= beta:
                 board.push(Move.null())
@@ -185,7 +197,7 @@ class AlphaBeta:
                     null_move=False,
                     cache=cache,
                     alpha=-beta,
-                    beta=-beta + 1
+                    beta=-beta + 1,
                 )[0]
                 board.pop()
                 if board_score >= beta:
@@ -208,7 +220,7 @@ class AlphaBeta:
                 null_move=null_move,
                 cache=cache,
                 alpha=-beta,
-                beta=-alpha
+                beta=-alpha,
             )[0]
             if board_score > self.config.checkmate_threshold:
                 board_score -= 1
@@ -239,14 +251,18 @@ class AlphaBeta:
 
         # if no best move, make a random one
         if not best_move:
-            best_move = self.random_move(board).uci()
+            best_move = self.random_move(board)
 
         # save result before returning
         cache[cache_key] = (best_score, best_move)
         return best_score, best_move
 
-    def search_move(self, board: Board) -> Optional[str]:
+    def search_move(self, board: Board) -> Move:
         # create shared cache
         cache: CACHE_KEY = {}
 
-        return self.negamax(board, copy(self.config.negamax_depth), self.config.null_move, cache)[1]
+        best_move = self.negamax(
+            board, copy(self.config.negamax_depth), self.config.null_move, cache
+        )[1]
+        assert best_move is not None, "Best move from root should not be None"
+        return best_move

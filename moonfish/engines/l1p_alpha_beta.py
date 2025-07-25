@@ -1,9 +1,9 @@
 from copy import copy
-from multiprocessing import Manager, Pool, cpu_count
+from multiprocessing import cpu_count, Manager, Pool
 
-import chess
+from chess import Board, Move
 
-from engines.alpha_beta import AlphaBeta
+from moonfish.engines.alpha_beta import AlphaBeta
 
 
 class Layer1ParallelAlphaBeta(AlphaBeta):
@@ -12,7 +12,7 @@ class Layer1ParallelAlphaBeta(AlphaBeta):
     algorithm starting from the first layer.
     """
 
-    def search_move(self, board: chess.Board) -> str:
+    def search_move(self, board: Board) -> Move:
         # start multiprocessing
         nprocs = cpu_count()
         pool = Pool(processes=nprocs)
@@ -25,10 +25,13 @@ class Layer1ParallelAlphaBeta(AlphaBeta):
         for move in moves:
             board.push(move)
             arguments.append(
-                (copy(board),
-                 copy(self.config.negamax_depth) - 1,
-                 self.config.null_move,
-                 shared_cache))
+                (
+                    copy(board),
+                    copy(self.config.negamax_depth) - 1,
+                    self.config.null_move,
+                    shared_cache,
+                )
+            )
             board.pop()
 
         # executing all the moves at layer 1 in parallel

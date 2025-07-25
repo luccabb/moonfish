@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ['3.10', '3.11', '3.12']
+    env:
+      UV_SYSTEM_PYTHON: 1
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+        cache-dependency-glob: "requirements.txt"
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dev requirements
+      run: |
+        make install
+
+    - name: Test moonfish import
+      shell: bash -l {0}
+      run: |
+        python -c "import moonfish"
+        python -c "import moonfish; import chess; board = chess.Board(); move = moonfish.search_move(board)"
+
+    - name: Test CLI functionality
+      shell: bash -l {0}
+      run: |
+        moonfish --help
+
+    - name: Run unit tests
+      shell: bash -l {0}
+      run: |
+        python -m unittest tests/test.py
+
+  format:
+    name: Import Sorting
+    runs-on: ubuntu-latest
+    env:
+      UV_SYSTEM_PYTHON: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "requirements.txt"
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Install dev requirements
+        run: |
+          make install
+      
+      - name: Run ufmt
+        run: ufmt check moonfish tests
+
+  lint:
+    name: Flake8 Linting
+    runs-on: ubuntu-latest
+    env:
+      UV_SYSTEM_PYTHON: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "requirements.txt"
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Install dev requirements
+        run: |
+          make install
+      
+      - name: Run Flake8
+        run: flake8 moonfish tests
+
+  typecheck:
+    name: Type Checking
+    runs-on: ubuntu-latest
+    env:
+      UV_SYSTEM_PYTHON: 1
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "requirements.txt"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Install dev requirements
+        run: |
+          make install
+
+      - name: Run mypy
+        run: mypy moonfish tests

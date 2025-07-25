@@ -1,10 +1,10 @@
+import time
 import unittest
 
 from chess import Board, Move
-import time
 
-from helper import get_engine
-from config import Config
+from moonfish.config import Config
+from moonfish.helper import get_engine
 
 POSITIONS = [
     ("1k1r4/pp1b1R2/3q2pp/4p3/2B5/4Q3/PPP2B2/2K5 b - - 0 1", [Move.from_uci("d6d1")]),
@@ -114,7 +114,9 @@ class TestChessFunctions(unittest.TestCase):
             if result in moves:
                 correct += 1
         end_time = time.monotonic()
-        print(f"Time: {end_time - start_time}, Correct Moves: {correct} of {len(POSITIONS)}")
+        print(
+            f"Time: {end_time - start_time}, Correct Moves: {correct} of {len(POSITIONS)}"
+        )
 
 
 if __name__ == "__main__":

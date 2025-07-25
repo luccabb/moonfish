@@ -1,12 +1,11 @@
-
-import click
 import multiprocessing
-
-from config import Config
 from typing import Optional
 
-from mode.uci import main as uci_main
-from mode.api import main as api_main
+import click
+
+from moonfish.config import Config
+from moonfish.mode.api import main as api_main
+from moonfish.mode.uci import main as uci_main
 
 
 def run(config: Config):
@@ -20,23 +19,16 @@ def run(config: Config):
 
 @click.command()
 @click.option(
-    "--mode",
-    type=str,
-    help="Mode to run the engine, one of [uci, api].",
-    default="uci"
+    "--mode", type=str, help="Mode to run the engine, one of [uci, api].", default="uci"
 )
 @click.option(
     "--algorithm",
     type=str,
     help="Algorithm to use to search move.",
-    default="alpha_beta"
+    default="alpha_beta",
 )
 @click.option(
-    "--depth",
-    "--negamax-depth",
-    type=int,
-    help="Depth of negamax search.",
-    default=3
+    "--depth", "--negamax-depth", type=int, help="Depth of negamax search.", default=3
 )
 @click.option(
     "--null-move",
@@ -54,19 +46,16 @@ def run(config: Config):
     "--quiescence-search-depth",
     type=int,
     help="Max depth of quiescence search.",
-    default=3
+    default=3,
 )
 @click.option(
-    "--syzygy-path",
-    type=str,
-    help="Path to syzygy endgame tablebases.",
-    default=None
+    "--syzygy-path", type=str, help="Path to syzygy endgame tablebases.", default=None
 )
 @click.option(
     "--syzygy-pieces",
     type=int,
     help="Remaining pieces to use syzygy endgame tablebases.",
-    default=5
+    default=5,
 )
 def main(
     mode: str,
