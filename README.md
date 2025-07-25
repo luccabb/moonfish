@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="moonfish.png" alt="moonfish" width="200"/>
+    <img src="https://raw.githubusercontent.com/luccabb/moonfish/master/moonfish.png" alt="moonfish" width="200"/>
 </p>
 
 # Moonfish Engine ([~2000 Elo Rating Lichess.org](https://lichess.org/@/moonfish_bot))
