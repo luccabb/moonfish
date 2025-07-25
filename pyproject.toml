@@ -33,6 +33,10 @@ moonfish = "moonfish.main:main"
 [tool.setuptools]
 packages = ["moonfish"]
 
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme = "no-local-version"
+
 [tool.setuptools.package-data]
 "moonfish" = ["py.typed"]
 
