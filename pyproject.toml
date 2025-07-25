@@ -24,6 +24,7 @@ dependencies = [
   "black",
   "isort",
   "ufmt",
+  "types-flask-cors>=6.0.0.20250520",
 ]
 
 [project.scripts]
@@ -34,6 +35,10 @@ packages = ["moonfish"]
 
 [tool.setuptools.package-data]
 "moonfish" = ["py.typed"]
+
+[[tool.mypy.overrides]]
+module = ["parameterized.*"]   # include sub‑modules, just in case
+ignore_missing_imports = true
 
 [project.urls]
 Homepage = "https://github.com/luccabb/moonfish"

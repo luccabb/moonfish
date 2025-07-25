@@ -15,24 +15,20 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Setup Miniconda
-      uses: conda-incubator/setup-miniconda@v3
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
       with:
-        python-version: ${{ matrix.python-version }}
-        auto-update-conda: true
-        activate-environment: moonfish-test
-        environment-file: false
+        enable-cache: true
+        cache-dependency-glob: "requirements.txt"
 
-    - name: Install dependencies
-      shell: bash -l {0}
-      run: |
-        conda install pip
-        pip install -r requirements.txt
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
 
-    - name: Install moonfish package
-      shell: bash -l {0}
+    - name: Install dev requirements
       run: |
-        pip install -e .
+        make install
 
     - name: Test moonfish import
       shell: bash -l {0}
@@ -55,36 +51,48 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "requirements.txt"
       
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
       
-      - name: Install dependencies
+      - name: Install dev requirements
         run: |
-          pip install -r requirements.txt
+          make install
       
       - name: Run ufmt
-        run: ufmt .
+        run: ufmt check moonfish tests
 
   lint:
     name: Flake8 Linting
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "requirements.txt"
       
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
       
-      - name: Install dependencies
+      - name: Install dev requirements
         run: |
-          pip install -r requirements.txt
+          make install
       
       - name: Run Flake8
-        run: flake8 .
+        run: flake8 moonfish tests
 
   typecheck:
     name: Type Checking
@@ -92,16 +100,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "requirements.txt"
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
           cache: 'pip'
       
-      - name: Install dependencies
+      - name: Install dev requirements
         run: |
-          pip install -r requirements.txt
-          mypy --install-types
+          make install
 
       - name: Run mypy
-        run: mypy .
+        run: mypy moonfish tests
