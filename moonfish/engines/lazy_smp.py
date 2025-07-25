@@ -1,14 +1,14 @@
 from copy import copy
 from multiprocessing import cpu_count, Manager, Pool
 
-from chess import Board
+from chess import Board, Move
 
 from moonfish.engines.alpha_beta import AlphaBeta
 
 
 class LazySMP(AlphaBeta):
 
-    def search_move(self, board: Board) -> str:
+    def search_move(self, board: Board) -> Move:
         # start multiprocessing
         nprocs = cpu_count()
         pool = Pool(processes=nprocs)

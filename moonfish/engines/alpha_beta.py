@@ -10,7 +10,9 @@ from moonfish.engines.random import choice
 from moonfish.move_ordering import organize_moves, organize_moves_quiescence
 from moonfish.psqt import board_evaluation, count_pieces
 
-CACHE_KEY = Dict[Tuple[str, int, bool, float, float], Tuple[float | int, Optional[str]]]
+CACHE_KEY = Dict[
+    Tuple[str, int, bool, float, float], Tuple[float | int, Optional[Move]]
+]
 
 
 class AlphaBeta:
@@ -125,7 +127,7 @@ class AlphaBeta:
         cache: DictProxy | CACHE_KEY,
         alpha: float = float("-inf"),
         beta: float = float("inf"),
-    ) -> Tuple[float | int, Optional[str]]:
+    ) -> Tuple[float | int, Optional[Move]]:
         """
         This functions receives a board, depth and a player; and it returns
         the best move for the current board based on how many depths we're looking ahead
@@ -249,13 +251,13 @@ class AlphaBeta:
 
         # if no best move, make a random one
         if not best_move:
-            best_move = self.random_move(board).uci()
+            best_move = self.random_move(board)
 
         # save result before returning
         cache[cache_key] = (best_score, best_move)
         return best_score, best_move
 
-    def search_move(self, board: Board) -> str:
+    def search_move(self, board: Board) -> Move:
         # create shared cache
         cache: CACHE_KEY = {}
 

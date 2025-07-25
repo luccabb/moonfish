@@ -5,7 +5,7 @@ from multiprocessing import cpu_count, Manager, Pool
 from multiprocessing.managers import DictProxy
 from typing import List, Tuple
 
-from chess import Board
+from chess import Board, Move
 
 from moonfish.config import Config
 from moonfish.engines.alpha_beta import AlphaBeta
@@ -76,7 +76,7 @@ class Layer2ParallelAlphaBeta(AlphaBeta):
 
         return boards_and_moves
 
-    def search_move(self, board: Board) -> str:
+    def search_move(self, board: Board) -> Move:
         START_LAYER = 2
         # start multiprocessing
         nprocs = cpu_count()

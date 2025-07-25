@@ -1,6 +1,6 @@
 from enum import Enum
 
-from chess import Board, polyglot
+from chess import Board, Move, polyglot
 
 from moonfish.config import Config
 from moonfish.engines.alpha_beta import AlphaBeta
@@ -46,7 +46,7 @@ def get_engine(config: Config):
     raise Exception("algorithm not supported")
 
 
-def find_best_move(board: Board, engine: ChessEngine) -> str:
+def find_best_move(board: Board, engine: ChessEngine) -> Move:
     """
     Finds the best move for the given board using the given engine.
 
@@ -62,9 +62,7 @@ def find_best_move(board: Board, engine: ChessEngine) -> str:
     # available in the opening book, so our engine starts playing after that.
     try:
         best_move = (
-            polyglot.MemoryMappedReader("opening_book/cerebellum.bin")
-            .find(board)
-            .move.uci()
+            polyglot.MemoryMappedReader("opening_book/cerebellum.bin").find(board).move
         )
     except (ValueError, OSError, AttributeError, IndexError):
         best_move = engine.search_move(board)

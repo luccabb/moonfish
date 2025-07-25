@@ -2,7 +2,7 @@ import ast
 from multiprocessing import set_start_method
 from typing import Any, Dict
 
-from chess import Board
+from chess import Board, Move
 from flask import Flask, request
 from flask_cors import CORS, cross_origin
 
@@ -14,7 +14,7 @@ cors = CORS(app)
 app.config["CORS_HEADER"] = "Content-Type"
 
 
-def format_response(best_move: str) -> Dict[str, Any]:
+def format_response(best_move: Move) -> Dict[str, Any]:
     """
     Format the response to be sent back to the client.
 

@@ -1,6 +1,6 @@
 from typing import Optional
 
-from chess import Board
+from chess import Board, Move
 
 from moonfish.config import Config
 from moonfish.helper import Algorithm, find_best_move, get_engine
@@ -15,7 +15,7 @@ def search_move(
     quiescence_search_depth: int = 3,
     syzygy_path: Optional[str] = None,
     syzygy_pieces: int = 5,
-) -> Optional[str]:
+) -> Move:
     """
     Searches for the best move in the given board state using the specified engine.
 

@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from typing import Protocol
 
-from chess import Board
+from chess import Board, Move
 
 from moonfish.config import Config
 
@@ -20,7 +20,7 @@ class ChessEngine(Protocol):
     def __init__(self, config: Config): ...
 
     @abstractmethod
-    def search_move(self, board: Board) -> str:
+    def search_move(self, board: Board) -> Move:
         """
         We'll search for the best possible move in the board that we're
         receiving up to a given depth.
