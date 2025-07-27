@@ -4,7 +4,7 @@ To run the engine as a lichess bot you'll need to install the [Lichess Bot API](
 
 If you pull [https://github.com/ShailChoksi/lichess-bot](https://github.com/ShailChoksi/lichess-bot) to the same parent directory of moonfish, such that your local setup looks like:
 
-```bash
+```shell
 $ tree moonfish/ lichess-bot/ -L 1
 moonfish/
 ├── LICENSE
@@ -20,6 +20,6 @@ you could then run the below to setup (build + move files) lichess to work with 
 
 don't forget to create a [`.env`](../.env.example) with your lichess API token (with bot:play scope)
 
-```bash
+```shell
 lichess/setup_macos.sh
 ```

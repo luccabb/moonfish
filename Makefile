@@ -21,5 +21,8 @@ install: venv activate
 requirements.txt: pyproject.toml ensure-uv
 	uv pip compile pyproject.toml -o requirements.txt
 
+build-lichess: ensure-uv
+	uv run pyinstaller moonfish/main.py --name moonfish --onefile --hidden-import chess --add-data "opening_book:opening_book"
+
 clean:
-	rm -rf .venv __pycache__ .mypy_cache dist *.egg-info
+	rm -rf .venv __pycache__ .mypy_cache dist build *.egg-info *.spec

@@ -24,7 +24,7 @@ source .env
 read -p "Do you want to build a new binary? (y/n) " answer
 answer=$(echo "$answer" | tr '[:upper:]' '[:lower:]')
 if [[ "$answer" == "y" || "$answer" == "yes" ]]; then
-    python -m PyInstaller main.py --onefile
+    make build-lichess
 fi
 
 # fetch opening book if not already downloaded
@@ -39,7 +39,7 @@ brew install gettext
 if [ -f ../lichess-bot/engines/main ]; then
     rm ../lichess-bot/engines/main
 fi
-cp dist/main ../lichess-bot/engines/main
+cp dist/moonfish ../lichess-bot/engines/main
 mkdir -p ../lichess-bot/engines/opening_book
 cp opening_book/cerebellum.bin ../lichess-bot/engines/opening_book/cerebellum.bin
 bash .env
