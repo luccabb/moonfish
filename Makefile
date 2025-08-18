@@ -22,7 +22,7 @@ requirements.txt: pyproject.toml ensure-uv
 	uv pip compile pyproject.toml -o requirements.txt
 
 build-lichess: ensure-uv
-	uv run pyinstaller moonfish/main.py --name moonfish --onefile --hidden-import chess --add-data "opening_book:opening_book"
+	uv run pyinstaller moonfish/main.py --name moonfish --onefile --hidden-import chess --hidden-import bulletchess --hidden-import bulletchess._core --add-data "opening_book:opening_book" --collect-all bulletchess
 
 clean:
 	rm -rf .venv __pycache__ .mypy_cache dist build *.egg-info *.spec

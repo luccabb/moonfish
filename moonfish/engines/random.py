@@ -1,6 +1,6 @@
 from random import choice
 
-from chess import Board, Move
+from bulletchess import Board, Move
 
 from moonfish.config import Config
 
@@ -19,5 +19,5 @@ class RandomEngine:
         Returns:
             - move: a random move from the list of legal moves.
         """
-        move = choice([move for move in board.legal_moves])
+        move = choice([move for move in board.legal_moves()])
         return move

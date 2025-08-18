@@ -2,8 +2,9 @@ from copy import copy
 from multiprocessing.managers import DictProxy
 from typing import Dict, Optional, Tuple
 
-import chess.syzygy
-from chess import Board, Move
+import chess.syzygy  # Keep for tablebase support
+from bulletchess import Board, Move
+from moonfish.bulletchess_compat import is_checkmate, is_stalemate
 
 from moonfish.config import Config
 from moonfish.engines.random import choice
@@ -24,7 +25,7 @@ class AlphaBeta:
         self.config = config
 
     def random_move(self, board: Board) -> Move:
-        move = choice([move for move in board.legal_moves])
+        move = choice([move for move in board.legal_moves()])
         return move
 
     def eval_board(self, board: Board) -> float:
@@ -77,10 +78,10 @@ class AlphaBeta:
         Returns:
             - best_score: returns best move's score.
         """
-        if board.is_stalemate():
+        if is_stalemate(board):
             return 0
 
-        if board.is_checkmate():
+        if is_checkmate(board):
             return -self.config.checkmate_score
 
         stand_pat = self.eval_board(board)
@@ -101,14 +102,14 @@ class AlphaBeta:
 
         for move in moves:
             # make move and get score
-            board.push(move)
+            board.apply(move)
             score = -self.quiescence_search(
                 board=board,
                 depth=depth - 1,
                 alpha=-beta,
                 beta=-alpha,
             )
-            board.pop()
+            board.undo()
 
             # beta-cutoff
             if score >= beta:
@@ -162,11 +163,11 @@ class AlphaBeta:
         if cache_key in cache:
             return cache[cache_key]
 
-        if board.is_checkmate():
+        if is_checkmate(board):
             cache[cache_key] = (-self.config.checkmate_score, None)
             return (-self.config.checkmate_score, None)
 
-        if board.is_stalemate():
+        if is_stalemate(board):
             cache[cache_key] = (0, None)
             return (0, None)
 
@@ -182,27 +183,28 @@ class AlphaBeta:
             cache[cache_key] = (board_score, None)
             return board_score, None
 
-        # null move prunning
-        if (
-            self.config.null_move
-            and depth >= (self.config.null_move_r + 1)
-            and not board.is_check()
-        ):
-            board_score = self.eval_board(board)
-            if board_score >= beta:
-                board.push(Move.null())
-                board_score = -self.negamax(
-                    board=board,
-                    depth=depth - 1 - self.config.null_move_r,
-                    null_move=False,
-                    cache=cache,
-                    alpha=-beta,
-                    beta=-beta + 1,
-                )[0]
-                board.pop()
-                if board_score >= beta:
-                    cache[cache_key] = (beta, None)
-                    return beta, None
+        # null move prunning - disabled for bulletchess compatibility
+        # TODO: implement null move support for bulletchess
+        # if (
+        #     self.config.null_move
+        #     and depth >= (self.config.null_move_r + 1)
+        #     and not is_check(board)
+        # ):
+        #     board_score = self.eval_board(board)
+        #     if board_score >= beta:
+        #         board.apply(Move.null())
+        #         board_score = -self.negamax(
+        #             board=board,
+        #             depth=depth - 1 - self.config.null_move_r,
+        #             null_move=False,
+        #             cache=cache,
+        #             alpha=-beta,
+        #             beta=-beta + 1,
+        #         )[0]
+        #         board.undo()
+        #         if board_score >= beta:
+        #             cache[cache_key] = (beta, None)
+        #             return beta, None
 
         best_move = None
 
@@ -212,7 +214,7 @@ class AlphaBeta:
 
         for move in moves:
             # make the move
-            board.push(move)
+            board.apply(move)
 
             board_score = -self.negamax(
                 board=board,
@@ -228,7 +230,7 @@ class AlphaBeta:
                 board_score += 1
 
             # take move back
-            board.pop()
+            board.undo()
 
             # beta-cutoff
             if board_score >= beta:

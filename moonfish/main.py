@@ -28,7 +28,7 @@ def run(config: Config):
     default="alpha_beta",
 )
 @click.option(
-    "--depth", "--negamax-depth", type=int, help="Depth of negamax search.", default=3
+    "--depth", "--negamax-depth", type=int, help="Depth of negamax search.", default=5
 )
 @click.option(
     "--null-move",

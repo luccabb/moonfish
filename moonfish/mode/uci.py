@@ -1,9 +1,12 @@
 import sys
 
-from chess import Board, STARTING_FEN
-
+from bulletchess import Board
+from moonfish.bulletchess_compat import push_uci
 from moonfish.config import Config
 from moonfish.helper import find_best_move, get_engine
+
+STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
 
 # UCI based on Sunfish Engine: https://github.com/thomasahle/sunfish/blob/master/uci.py
 
@@ -62,9 +65,9 @@ def main(config: Config):
                 raise SyntaxError("UCI Syntax error.")
 
             # start board and make moves
-            board = Board(fen)
+            board = Board.from_fen(fen)
             for move in moveslist:
-                board.push_uci(move)
+                push_uci(board, move)
 
         elif uci_command.startswith("go"):
             best_move = find_best_move(

@@ -1,6 +1,8 @@
 from enum import Enum
 
-from chess import Board, Move, polyglot
+import chess.polyglot as polyglot  # Keep for opening book support
+
+from bulletchess import Board, Move
 
 from moonfish.config import Config
 from moonfish.engines.alpha_beta import AlphaBeta

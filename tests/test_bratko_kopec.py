@@ -1,7 +1,7 @@
 import time
 import unittest
 
-from chess import Board, Move
+from bulletchess import Board, Move
 
 from moonfish.config import Config
 from moonfish.helper import get_engine
@@ -105,7 +105,7 @@ class TestChessFunctions(unittest.TestCase):
         correct = 0
         start_time = time.monotonic()
         for i, (position, moves) in enumerate(POSITIONS):
-            board = Board(position)
+            board = Board.from_fen(position)
 
             engine = get_engine(TEST_CONFIG)
             result = engine.search_move(board)

@@ -7,13 +7,14 @@ name = "moonfish"
 dynamic = ["version"]
 readme = "README.md"
 description = "Moonfish is a didactic Python chess engine showcasing parallel search algorithms and modern chess programming techniques."
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 license = {file = "LICENSE"}
 authors = [
   {name = "Lucca Bertoncini", email = "luccabazzo@gmail.com"},
 ]
 dependencies = [
-  "chess",
+  "bulletchess",
+  "chess",  # Keep for polyglot and syzygy support
   "click",
   "Flask",
   "Flask-Cors",

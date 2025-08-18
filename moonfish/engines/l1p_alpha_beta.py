@@ -1,7 +1,7 @@
 from copy import copy
 from multiprocessing import cpu_count, Manager, Pool
 
-from chess import Board, Move
+from bulletchess import Board, Move
 
 from moonfish.engines.alpha_beta import AlphaBeta
 
@@ -20,10 +20,10 @@ class Layer1ParallelAlphaBeta(AlphaBeta):
         shared_cache = manager.dict()
 
         # creating list of moves at layer 1
-        moves = list(board.legal_moves)
+        moves = list(board.legal_moves())
         arguments = []
         for move in moves:
-            board.push(move)
+            board.apply(move)
             arguments.append(
                 (
                     copy(board),
@@ -32,7 +32,7 @@ class Layer1ParallelAlphaBeta(AlphaBeta):
                     shared_cache,
                 )
             )
-            board.pop()
+            board.undo()
 
         # executing all the moves at layer 1 in parallel
         # starmap blocks until all process are done

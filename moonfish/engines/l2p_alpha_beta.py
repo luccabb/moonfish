@@ -5,7 +5,7 @@ from multiprocessing import cpu_count, Manager, Pool
 from multiprocessing.managers import DictProxy
 from typing import List, Tuple
 
-from chess import Board, Move
+from bulletchess import Board, Move
 
 from moonfish.config import Config
 from moonfish.engines.alpha_beta import AlphaBeta
@@ -53,16 +53,16 @@ class Layer2ParallelAlphaBeta(AlphaBeta):
 
         # if board has no legal moves, we leave it as is
         # we need to run this board through negamax to get its value
-        if not og_board.legal_moves:
+        if not og_board.legal_moves():
             boards_and_moves.append((og_board, og_board, layer))
 
         # get first layer move that generates current board
         first_move = board_to_move_that_generates_it.get(og_board.fen())
 
         # generating all possible moves
-        for move in board.legal_moves:
+        for move in board.legal_moves():
 
-            board.push(move)
+            board.apply(move)
 
             # save first layer move that generates current board
             if first_move:
@@ -72,7 +72,7 @@ class Layer2ParallelAlphaBeta(AlphaBeta):
             # add new board, original board, and current layer to our output
             boards_and_moves.append((copy(board), og_board, layer + 1))
 
-            board.pop()
+            board.undo()
 
         return boards_and_moves
 

@@ -2,7 +2,7 @@ import ast
 from multiprocessing import set_start_method
 from typing import Any, Dict
 
-from chess import Board, Move
+from bulletchess import Board, Move
 from flask import Flask, request
 from flask_cors import CORS, cross_origin
 
@@ -82,7 +82,7 @@ def main_search() -> Dict[str, Any]:
     )
 
     # create the board
-    board = Board(fen)
+    board = Board.from_fen(fen)
     engine = get_engine(config)
 
     best_move = find_best_move(

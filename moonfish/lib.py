@@ -1,6 +1,6 @@
 from typing import Optional
 
-from chess import Board, Move
+from bulletchess import Board, Move
 
 from moonfish.config import Config
 from moonfish.helper import Algorithm, find_best_move, get_engine

@@ -1,8 +1,10 @@
 # flake8: noqa
 from typing import List, Tuple
 
-import chess
-import chess.syzygy
+import bulletchess
+import chess.syzygy  # Keep for tablebase support
+
+from moonfish.bulletchess_compat import is_en_passant, piece_at, square_to_index
 
 from moonfish.config import Config
 
@@ -13,21 +15,21 @@ from moonfish.config import Config
 # http://www.talkchess.com/forum3/viewtopic.php?f=2&t=68311&start=19
 ############
 MG_PIECE_VALUES = {
-    chess.PAWN: 82,
-    chess.KNIGHT: 337,
-    chess.BISHOP: 365,
-    chess.ROOK: 477,
-    chess.QUEEN: 1025,
-    chess.KING: 24000,
+    bulletchess.PAWN: 82,
+    bulletchess.KNIGHT: 337,
+    bulletchess.BISHOP: 365,
+    bulletchess.ROOK: 477,
+    bulletchess.QUEEN: 1025,
+    bulletchess.KING: 24000,
 }
 
 EG_PIECE_VALUES = {
-    chess.PAWN: 94,
-    chess.KNIGHT: 281,
-    chess.BISHOP: 297,
-    chess.ROOK: 512,
-    chess.QUEEN: 936,
-    chess.KING: 24000,
+    bulletchess.PAWN: 94,
+    bulletchess.KNIGHT: 281,
+    bulletchess.BISHOP: 297,
+    bulletchess.ROOK: 512,
+    bulletchess.QUEEN: 936,
+    bulletchess.KING: 24000,
 }
 
 # fmt: off
@@ -153,21 +155,21 @@ EG_KING = [
 # fmt: on
 
 MG_PESTO = {
-    chess.PAWN: MG_PAWN,
-    chess.KNIGHT: MG_KNIGHT,
-    chess.BISHOP: MG_BISHOP,
-    chess.ROOK: MG_ROOK,
-    chess.QUEEN: MG_QUEEN,
-    chess.KING: MG_KING,
+    bulletchess.PAWN: MG_PAWN,
+    bulletchess.KNIGHT: MG_KNIGHT,
+    bulletchess.BISHOP: MG_BISHOP,
+    bulletchess.ROOK: MG_ROOK,
+    bulletchess.QUEEN: MG_QUEEN,
+    bulletchess.KING: MG_KING,
 }
 
 EG_PESTO = {
-    chess.PAWN: EG_PAWN,
-    chess.KNIGHT: EG_KNIGHT,
-    chess.BISHOP: EG_BISHOP,
-    chess.ROOK: EG_ROOK,
-    chess.QUEEN: EG_QUEEN,
-    chess.KING: EG_KING,
+    bulletchess.PAWN: EG_PAWN,
+    bulletchess.KNIGHT: EG_KNIGHT,
+    bulletchess.BISHOP: EG_BISHOP,
+    bulletchess.ROOK: EG_ROOK,
+    bulletchess.QUEEN: EG_QUEEN,
+    bulletchess.KING: EG_KING,
 }
 
 ############
@@ -202,7 +204,7 @@ PHASE_VALUES = [
 ]
 
 
-def count_pieces(board: chess.Board) -> List[int]:
+def count_pieces(board: bulletchess.Board) -> List[int]:
     """
     Counts the number of each piece on the board.
 
@@ -213,16 +215,35 @@ def count_pieces(board: chess.Board) -> List[int]:
         and their phase value.
     """
 
-    wp = len(board.pieces(chess.PAWN, chess.WHITE))
-    wn = len(board.pieces(chess.KNIGHT, chess.WHITE))
-    wb = len(board.pieces(chess.BISHOP, chess.WHITE))
-    wr = len(board.pieces(chess.ROOK, chess.WHITE))
-    wq = len(board.pieces(chess.QUEEN, chess.WHITE))
-    bp = len(board.pieces(chess.PAWN, chess.BLACK))
-    bn = len(board.pieces(chess.KNIGHT, chess.BLACK))
-    bb = len(board.pieces(chess.BISHOP, chess.BLACK))
-    br = len(board.pieces(chess.ROOK, chess.BLACK))
-    bq = len(board.pieces(chess.QUEEN, chess.BLACK))
+    # Count pieces by iterating through all squares
+    wp = wn = wb = wr = wq = 0
+    bp = bn = bb = br = bq = 0
+
+    for square in bulletchess.SQUARES:
+        piece = board[square]
+        if piece:
+            if piece.color == bulletchess.WHITE:
+                if piece.piece_type == bulletchess.PAWN:
+                    wp += 1
+                elif piece.piece_type == bulletchess.KNIGHT:
+                    wn += 1
+                elif piece.piece_type == bulletchess.BISHOP:
+                    wb += 1
+                elif piece.piece_type == bulletchess.ROOK:
+                    wr += 1
+                elif piece.piece_type == bulletchess.QUEEN:
+                    wq += 1
+            else:  # BLACK
+                if piece.piece_type == bulletchess.PAWN:
+                    bp += 1
+                elif piece.piece_type == bulletchess.KNIGHT:
+                    bn += 1
+                elif piece.piece_type == bulletchess.BISHOP:
+                    bb += 1
+                elif piece.piece_type == bulletchess.ROOK:
+                    br += 1
+                elif piece.piece_type == bulletchess.QUEEN:
+                    bq += 1
 
     return [
         wp,
@@ -238,7 +259,7 @@ def count_pieces(board: chess.Board) -> List[int]:
     ]
 
 
-def get_phase(board: chess.Board) -> float:
+def get_phase(board: bulletchess.Board) -> float:
     """
     Calculates the phase of the game based on the number of pieces
     on the board.
@@ -264,7 +285,7 @@ BOARD_EVALUATION_CACHE = {}
 
 def board_evaluation_cache(fun):
 
-    def inner(board: chess.Board):
+    def inner(board: bulletchess.Board):
         key = board.fen()
         if key not in BOARD_EVALUATION_CACHE:
             BOARD_EVALUATION_CACHE[key] = fun(board)
@@ -274,7 +295,7 @@ def board_evaluation_cache(fun):
 
 
 @board_evaluation_cache
-def board_evaluation(board: chess.Board) -> float:
+def board_evaluation(board: bulletchess.Board) -> float:
     """
     This functions receives a board and assigns a value to it, it acts as
     an evaluation function of the current state for this game. It returns
@@ -291,46 +312,54 @@ def board_evaluation(board: chess.Board) -> float:
     phase = get_phase(board)
 
     mg = {
-        chess.WHITE: 0,
-        chess.BLACK: 0,
+        bulletchess.WHITE: 0,
+        bulletchess.BLACK: 0,
     }
     eg = {
-        chess.WHITE: 0,
-        chess.BLACK: 0,
+        bulletchess.WHITE: 0,
+        bulletchess.BLACK: 0,
     }
 
     # loop through all squares and sum their piece values for both sides
-    for square in range(64):
-        piece = board.piece_at(square)
+    for square in bulletchess.SQUARES:
+        piece = piece_at(board, square)
         if piece is None:
             continue
 
-        if piece.color == chess.WHITE:
+        square_idx = square_to_index(square)
+        if piece.color == bulletchess.WHITE:
             mg[piece.color] += (
-                MG_PESTO[piece.piece_type][square ^ 56]
+                MG_PESTO[piece.piece_type][square_idx ^ 56]
                 + MG_PIECE_VALUES[piece.piece_type]
             )
             eg[piece.color] += (
-                EG_PESTO[piece.piece_type][square ^ 56]
+                EG_PESTO[piece.piece_type][square_idx ^ 56]
                 + EG_PIECE_VALUES[piece.piece_type]
             )
-        if piece.color == chess.BLACK:
+        if piece.color == bulletchess.BLACK:
             mg[piece.color] += (
-                MG_PESTO[piece.piece_type][square] + MG_PIECE_VALUES[piece.piece_type]
+                MG_PESTO[piece.piece_type][square_idx]
+                + MG_PIECE_VALUES[piece.piece_type]
             )
             eg[piece.color] += (
-                EG_PESTO[piece.piece_type][square] + EG_PIECE_VALUES[piece.piece_type]
+                EG_PESTO[piece.piece_type][square_idx]
+                + EG_PIECE_VALUES[piece.piece_type]
             )
 
     # calculate board score based on phase
-    mg_score = mg[board.turn] - mg[not board.turn]
-    eg_score = eg[board.turn] - eg[not board.turn]
+    opponent_color = (
+        bulletchess.BLACK if board.turn == bulletchess.WHITE else bulletchess.WHITE
+    )
+    mg_score = mg[board.turn] - mg[opponent_color]
+    eg_score = eg[board.turn] - eg[opponent_color]
     eval = ((mg_score * (256 - phase)) + (eg_score * phase)) / 256
 
     return eval
 
 
-def evaluate_piece(board: chess.Board, square: chess.Square, phase: float) -> float:
+def evaluate_piece(
+    board: bulletchess.Board, square: bulletchess.Square, phase: float
+) -> float:
     """
     Evaluates a piece on a given square.
 
@@ -347,23 +376,26 @@ def evaluate_piece(board: chess.Board, square: chess.Square, phase: float) -> fl
     eg_score = 0
 
     # get mid and end game score for single piece
-    piece = board.piece_at(square)
+    piece = piece_at(board, square)
     if piece is not None:
-        if piece.color == chess.WHITE:
+        square_idx = square_to_index(square)
+        if piece.color == bulletchess.WHITE:
             mg_score += (
-                MG_PESTO[piece.piece_type][square ^ 56]
+                MG_PESTO[piece.piece_type][square_idx ^ 56]
                 + MG_PIECE_VALUES[piece.piece_type]
             )
             eg_score += (
-                EG_PESTO[piece.piece_type][square ^ 56]
+                EG_PESTO[piece.piece_type][square_idx ^ 56]
                 + EG_PIECE_VALUES[piece.piece_type]
             )
-        if piece.color == chess.BLACK:
+        if piece.color == bulletchess.BLACK:
             mg_score += (
-                MG_PESTO[piece.piece_type][square] + MG_PIECE_VALUES[piece.piece_type]
+                MG_PESTO[piece.piece_type][square_idx]
+                + MG_PIECE_VALUES[piece.piece_type]
             )
             eg_score += (
-                EG_PESTO[piece.piece_type][square] + EG_PIECE_VALUES[piece.piece_type]
+                EG_PESTO[piece.piece_type][square_idx]
+                + EG_PIECE_VALUES[piece.piece_type]
             )
 
     # evaluate piece value based on phase
@@ -371,7 +403,9 @@ def evaluate_piece(board: chess.Board, square: chess.Square, phase: float) -> fl
     return eval
 
 
-def evaluate_capture(board: chess.Board, move: chess.Move, phase: float) -> float:
+def evaluate_capture(
+    board: bulletchess.Board, move: bulletchess.Move, phase: float
+) -> float:
     """
     Evaluates a capture move based phase of the game.
 
@@ -388,13 +422,13 @@ def evaluate_capture(board: chess.Board, move: chess.Move, phase: float) -> floa
     eg_score = 0
 
     # en passant score
-    if board.is_en_passant(move):
+    if is_en_passant(board, move):
         # En passant capture evaluation
-        capturing_piece = chess.PAWN
-        captured_piece = chess.PAWN
+        capturing_piece = bulletchess.PAWN
+        captured_piece = bulletchess.PAWN
     else:
-        capturing_piece = board.piece_at(move.from_square).piece_type  # type: ignore
-        captured_piece = board.piece_at(move.to_square).piece_type  # type: ignore
+        capturing_piece = piece_at(board, move.origin).piece_type  # type: ignore
+        captured_piece = piece_at(board, move.destination).piece_type  # type: ignore
 
     # get mid and end game difference of scores between captured
     # and capturing piece
