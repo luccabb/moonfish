@@ -32,26 +32,45 @@ def organize_moves(board: Board):
     return captures + non_captures
 
 
+def is_tactical_move(board: Board, move: Move) -> bool:
+    """
+    Check if a move is tactical (should be searched in quiescence).
+
+    Tactical moves are:
+    - Captures (change material)
+    - Promotions (significant material gain)
+    - Moves that give check (forcing)
+    """
+    return (
+        board.is_capture(move) or move.promotion is not None or board.gives_check(move)
+    )
+
+
 def organize_moves_quiescence(board: Board):
     """
     This function receives a board and it returns a list of all the
     possible moves for the current player, sorted by importance.
 
+    Only returns tactical moves: captures, promotions, and checks.
+
     Arguments:
             - board: chess board state
 
     Returns:
-            - moves: list of all the possible moves for the current player sorted based on importance.
+            - moves: list of tactical moves sorted by importance (MVV-LVA).
     """
     phase = get_phase(board)
-    # filter only important moves for quiescence search
-    captures = filter(
-        lambda move: board.is_zeroing(move) or board.gives_check(move),
+
+    # Filter only tactical moves for quiescence search
+    # (captures, promotions, checks - NOT quiet pawn pushes)
+    tactical_moves = filter(
+        lambda move: is_tactical_move(board, move),
         board.legal_moves,
     )
-    # sort moves by importance
+
+    # Sort moves by importance using MVV-LVA
     moves = sorted(
-        captures,
+        tactical_moves,
         key=lambda move: mvv_lva(board, move, phase),
         reverse=(board.turn == BLACK),
     )
