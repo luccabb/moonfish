@@ -89,10 +89,10 @@ POSITIONS = [
 TEST_CONFIG = Config(
     mode="uci",
     algorithm="alpha_beta",
-    negamax_depth=4,
+    negamax_depth=7,  # Increased from 4 for stronger tactical play
     null_move=True,
     null_move_r=2,
-    quiescence_search_depth=1,
+    quiescence_search_depth=3,  # Increased from 1 for better tactical resolution
     syzygy_path=None,
     syzygy_pieces=5,
 )
