@@ -300,22 +300,72 @@ class AlphaBeta:
             moves.remove(tt_move)
             moves.insert(0, tt_move)
 
-        for move in moves:
+        in_check = board.is_check()
+
+        for move_index, move in enumerate(moves):
             is_capture = board.is_capture(move)
+            gives_check = board.gives_check(move)
+            is_promotion = move.promotion is not None
 
             # make the move
             board.push(move)
 
-            board_score = -self.negamax(
-                board=board,
-                depth=depth - 1,
-                null_move=null_move,
-                cache=cache,
-                alpha=-beta,
-                beta=-alpha,
-                ply=ply + 1,
-                killers=killers,
-            )[0]
+            # Late Move Reductions (LMR):
+            # Reduce search depth for late quiet moves that are unlikely to be good
+            # Conditions: sufficient depth, late move, quiet (no capture/check/promotion)
+            reduction = 0
+            if (
+                depth >= 3
+                and move_index >= 3
+                and not is_capture
+                and not gives_check
+                and not is_promotion
+                and not in_check
+            ):
+                # Simple reduction: reduce by 1 ply
+                reduction = 1
+
+            # Principal Variation Search (PVS):
+            # For the first move, search with full window
+            # For subsequent moves, search with zero window first
+            if move_index == 0:
+                # First move: full window search
+                board_score = -self.negamax(
+                    board=board,
+                    depth=depth - 1,
+                    null_move=null_move,
+                    cache=cache,
+                    alpha=-beta,
+                    beta=-alpha,
+                    ply=ply + 1,
+                    killers=killers,
+                )[0]
+            else:
+                # Later moves: zero window search (with LMR reduction if applicable)
+                board_score = -self.negamax(
+                    board=board,
+                    depth=depth - 1 - reduction,
+                    null_move=null_move,
+                    cache=cache,
+                    alpha=-alpha - 1,  # Zero window
+                    beta=-alpha,
+                    ply=ply + 1,
+                    killers=killers,
+                )[0]
+
+                # If zero window search found a promising move, re-search with full window
+                if board_score > alpha and (board_score < beta or reduction > 0):
+                    board_score = -self.negamax(
+                        board=board,
+                        depth=depth - 1,  # Full depth (no reduction)
+                        null_move=null_move,
+                        cache=cache,
+                        alpha=-beta,
+                        beta=-alpha,
+                        ply=ply + 1,
+                        killers=killers,
+                    )[0]
+
             if board_score > self.config.checkmate_threshold:
                 board_score -= 1
             if board_score < -self.config.checkmate_threshold:
