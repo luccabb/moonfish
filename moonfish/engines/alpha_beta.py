@@ -184,6 +184,8 @@ class AlphaBeta:
         cache: DictProxy | CACHE_TYPE,
         alpha: float = float("-inf"),
         beta: float = float("inf"),
+        ply: int = 0,
+        killers: Optional[list] = None,
     ) -> Tuple[float | int, Optional[Move]]:
         """
         This functions receives a board, depth and a player; and it returns
@@ -275,6 +277,8 @@ class AlphaBeta:
                     cache=cache,
                     alpha=-beta,
                     beta=-beta + 1,
+                    ply=ply + 1,
+                    killers=killers,
                 )[0]
                 board.pop()
                 if board_score >= beta:
@@ -284,9 +288,12 @@ class AlphaBeta:
 
         best_move = None
         best_score = float("-inf")
-        moves = organize_moves(board)
+        ply_killers = killers[ply] if killers and ply < len(killers) else None
+        moves = organize_moves(board, ply_killers)
 
         for move in moves:
+            is_capture = board.is_capture(move)
+
             # make the move
             board.push(move)
 
@@ -297,6 +304,8 @@ class AlphaBeta:
                 cache=cache,
                 alpha=-beta,
                 beta=-alpha,
+                ply=ply + 1,
+                killers=killers,
             )[0]
             if board_score > self.config.checkmate_threshold:
                 board_score -= 1
@@ -313,6 +322,18 @@ class AlphaBeta:
 
             # beta-cutoff: opponent won't allow this position
             if best_score >= beta:
+                # Update killer moves for quiet moves that cause beta cutoff
+                # Add to killers if not already there (keep 2 killers per ply)
+                if (
+                    killers
+                    and not is_capture
+                    and ply < len(killers)
+                    and move not in killers[ply]
+                ):
+                    killers[ply].insert(0, move)
+                    if len(killers[ply]) > 2:
+                        killers[ply].pop()
+
                 # LOWER_BOUND: true score is at least best_score
                 cache[cache_key] = (best_score, best_move, Bound.LOWER_BOUND, depth)
                 return best_score, best_move
@@ -339,8 +360,18 @@ class AlphaBeta:
         # create shared cache
         cache: CACHE_TYPE = {}
 
+        # Killer moves table: 2 killers per ply
+        # Max ply is roughly target_depth + quiescence_depth + some buffer
+        max_ply = self.config.negamax_depth + self.config.quiescence_search_depth + 10
+        killers: list = [[] for _ in range(max_ply)]
+
         best_move = self.negamax(
-            board, copy(self.config.negamax_depth), self.config.null_move, cache
+            board,
+            copy(self.config.negamax_depth),
+            self.config.null_move,
+            cache,
+            ply=0,
+            killers=killers,
         )[1]
         assert best_move is not None, "Best move from root should not be None"
         return best_move

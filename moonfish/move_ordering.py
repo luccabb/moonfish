@@ -1,25 +1,28 @@
 import random
+from typing import List, Optional
 
 from chess import BLACK, Board, Move
 
 from moonfish.psqt import evaluate_capture, evaluate_piece, get_phase
 
 
-def organize_moves(board: Board):
+def organize_moves(board: Board, killers: Optional[List[Move]] = None):
     """
     This function receives a board and it returns a list of all the
     possible moves for the current player, sorted by importance.
-    It sends capturing moves at the starting positions in
-    the array (to try to increase pruning and do so earlier).
+
+    Order: captures (sorted by MVV-LVA) -> killer moves -> other quiet moves
 
     Arguments:
             - board: chess board state
+            - killers: optional list of killer moves for this ply
 
     Returns:
             - legal_moves: list of all the possible moves for the current player.
     """
     non_captures = []
     captures = []
+    phase = get_phase(board)
 
     for move in board.legal_moves:
         if board.is_capture(move):
@@ -27,8 +30,25 @@ def organize_moves(board: Board):
         else:
             non_captures.append(move)
 
-    random.shuffle(captures)
+    # Sort captures by MVV-LVA (best captures first)
+    captures.sort(
+        key=lambda move: mvv_lva(board, move, phase), reverse=(board.turn != BLACK)
+    )
+
+    # Shuffle non-captures for variety, then we'll extract killers
     random.shuffle(non_captures)
+
+    # Extract killer moves from non-captures and put them first
+    if killers:
+        killer_moves = []
+        remaining_quiet = []
+        for move in non_captures:
+            if move in killers:
+                killer_moves.append(move)
+            else:
+                remaining_quiet.append(move)
+        non_captures = killer_moves + remaining_quiet
+
     return captures + non_captures
 
 
