@@ -6,7 +6,6 @@ from multiprocessing.managers import DictProxy
 from typing import List, Tuple
 
 from chess import Board, Move
-
 from moonfish.config import Config
 from moonfish.engines.alpha_beta import AlphaBeta
 

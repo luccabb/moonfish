@@ -2,7 +2,6 @@ from abc import abstractmethod
 from typing import Protocol
 
 from chess import Board, Move
-
 from moonfish.config import Config
 
 

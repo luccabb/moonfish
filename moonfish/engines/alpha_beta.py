@@ -4,7 +4,6 @@ from typing import Dict, Optional, Tuple
 
 import chess.syzygy
 from chess import Board, Move
-
 from moonfish.config import Config
 from moonfish.engines.random import choice
 from moonfish.move_ordering import organize_moves, organize_moves_quiescence
