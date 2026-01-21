@@ -91,38 +91,68 @@ class AlphaBeta:
         Returns:
             - best_score: returns best move's score.
         """
-        if board.is_stalemate():
-            return 0
+        in_check = board.is_check()
 
         if board.is_checkmate():
             return -self.config.checkmate_score
 
+        if board.is_stalemate():
+            return 0
+
+        # Draw detection: fifty-move rule, insufficient material
+        # Note: Repetition is checked after making moves, not here
+        if board.is_fifty_moves() or board.is_insufficient_material():
+            return 0
+
         stand_pat = self.eval_board(board)
 
-        # recursion base case
-        if depth == 0:
-            return stand_pat
+        # When in check, we can't use stand-pat for pruning (position is unstable)
+        # We must search all evasions. However, still respect depth limit.
+        if in_check:
+            # In check: search all evasions, but don't use stand-pat for cutoffs
+            if depth <= 0:
+                # At depth limit while in check: return evaluation
+                # (not ideal but prevents infinite recursion)
+                return stand_pat
 
-        # beta-cutoff
-        if stand_pat >= beta:
-            return beta
+            best_score = float("-inf")
+            moves = list(board.legal_moves)  # All evasions
+        else:
+            # Not in check: normal quiescence behavior
+            # recursion base case
+            if depth <= 0:
+                return stand_pat
 
-        # alpha update
-        alpha = max(alpha, stand_pat)
+            # beta-cutoff: position is already good enough
+            if stand_pat >= beta:
+                return beta
 
-        # get moves for quiescence search
-        moves = organize_moves_quiescence(board)
+            # Use stand-pat as baseline (we can always choose not to capture)
+            best_score = stand_pat
+            alpha = max(alpha, stand_pat)
+
+            # Only tactical moves when not in check
+            moves = organize_moves_quiescence(board)
 
         for move in moves:
             # make move and get score
             board.push(move)
-            score = -self.quiescence_search(
-                board=board,
-                depth=depth - 1,
-                alpha=-beta,
-                beta=-alpha,
-            )
+
+            # Check if this move leads to a repetition (draw)
+            if board.is_repetition(2):
+                score: float = 0  # Draw score
+            else:
+                score = -self.quiescence_search(
+                    board=board,
+                    depth=depth - 1,
+                    alpha=-beta,
+                    beta=-alpha,
+                )
+
             board.pop()
+
+            if score > best_score:
+                best_score = score
 
             # beta-cutoff
             if score >= beta:
@@ -131,7 +161,7 @@ class AlphaBeta:
             # alpha-update
             alpha = max(alpha, score)
 
-        return alpha
+        return best_score
 
     def negamax(
         self,
