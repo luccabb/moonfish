@@ -4,7 +4,6 @@ from typing import Dict, Optional, Tuple
 
 import chess.syzygy
 from chess import Board, Move
-
 from moonfish.config import Config
 from moonfish.engines.random import choice
 from moonfish.move_ordering import organize_moves, organize_moves_quiescence
@@ -23,6 +22,21 @@ class AlphaBeta:
     def __init__(self, config: Config):
         self.config = config
 
+        # Open Syzygy tablebase once at initialization (not on every eval)
+        self.tablebase = None
+        if config.syzygy_path:
+            try:
+                self.tablebase = chess.syzygy.open_tablebase(config.syzygy_path)
+            except Exception:
+                # Tablebase path invalid or not accessible
+                self.tablebase = None
+
+    def close(self):
+        """Close the tablebase if open. Call when done with the engine."""
+        if self.tablebase is not None:
+            self.tablebase.close()
+            self.tablebase = None
+
     def random_move(self, board: Board) -> Move:
         move = choice([move for move in board.legal_moves])
         return move
@@ -40,14 +54,14 @@ class AlphaBeta:
         """
         pieces = sum(count_pieces(board))
 
-        if pieces <= self.config.syzygy_pieces and self.config.syzygy_path:
-            with chess.syzygy.open_tablebase(self.config.syzygy_path) as tablebase:
-                try:
-                    eval = tablebase.probe_dtz(board)
-                    return eval
-                except (chess.syzygy.MissingTableError, KeyError):
-                    # syzygy tablebase position not found, continue with evaluation
-                    pass
+        # Use pre-opened tablebase for endgame positions
+        if pieces <= self.config.syzygy_pieces and self.tablebase is not None:
+            try:
+                dtz = self.tablebase.probe_dtz(board)
+                return dtz
+            except (chess.syzygy.MissingTableError, KeyError):
+                # Position not in tablebase, fall through to normal evaluation
+                pass
 
         return board_evaluation(board)
 
