@@ -1,7 +1,6 @@
 from random import choice
 
 from chess import Board, Move
-
 from moonfish.config import Config
 
 

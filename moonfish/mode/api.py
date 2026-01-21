@@ -5,7 +5,6 @@ from typing import Any, Dict
 from chess import Board, Move
 from flask import Flask, request
 from flask_cors import CORS, cross_origin
-
 from moonfish.config import Config
 from moonfish.helper import find_best_move, get_engine
 

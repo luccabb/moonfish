@@ -2,7 +2,6 @@ from copy import copy
 from multiprocessing import cpu_count, Manager, Pool
 
 from chess import Board, Move
-
 from moonfish.engines.alpha_beta import AlphaBeta
 
 

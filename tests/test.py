@@ -1,7 +1,6 @@
 import unittest
 
 from chess import Board, Move
-
 from moonfish.config import Config
 from moonfish.helper import get_engine
 from parameterized import parameterized
