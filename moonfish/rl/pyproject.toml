@@ -1,0 +1,21 @@
+[project]
+name = "moonfish-chess-env"
+version = "1.0.0"
+description = "Chess RL environment using moonfish engine - OpenEnv compatible"
+requires-python = ">=3.10"
+
+dependencies = [
+    "chess>=1.10.0",
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.23.0",
+    "httpx>=0.24.0",
+    "pydantic>=2.0.0",
+    "openenv>=0.1.0",
+]
+
+[project.scripts]
+server = "server.app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
