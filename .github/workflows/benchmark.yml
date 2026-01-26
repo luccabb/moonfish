@@ -164,15 +164,6 @@ jobs:
         BLACK_LOSSES=$(grep -B5 'Result "1-0"' "$PGN" | grep -c 'Black "moonfish"' || echo 0)
         BLACK_DRAWS=$(grep -B5 'Result "1/2-1/2"' "$PGN" | grep -c 'Black "moonfish"' || echo 0)
 
-        # Parse termination reasons from move text (cutechess format)
-        # Count games where moonfish lost by various reasons
-        CHECKMATES=$(grep -c "mates}" "$PGN" || echo 0)
-        TIMEOUTS=$(grep -c "time forfeit}" "$PGN" || echo 0)
-        STALEMATES=$(grep -c "Stalemate" "$PGN" || echo 0)
-        REPETITION=$(grep -c "3-fold repetition}" "$PGN" || echo 0)
-        FIFTY_MOVE=$(grep -c "50-move rule}" "$PGN" || echo 0)
-        RESIGNATION=$(grep -c "resigns}" "$PGN" || echo 0)
-
         # Save detailed results
         cat > results-skill$SKILL-chunk$CHUNK.txt << EOF
         SKILL=$SKILL
@@ -185,12 +176,6 @@ jobs:
         BLACK_WINS=$BLACK_WINS
         BLACK_LOSSES=$BLACK_LOSSES
         BLACK_DRAWS=$BLACK_DRAWS
-        CHECKMATES=$CHECKMATES
-        TIMEOUTS=$TIMEOUTS
-        STALEMATES=$STALEMATES
-        REPETITION=$REPETITION
-        FIFTY_MOVE=$FIFTY_MOVE
-        RESIGNATION=$RESIGNATION
         EOF
 
         echo "Skill $SKILL, Chunk $CHUNK: W=$WINS L=$LOSSES D=$DRAWS (White: $WHITE_WINS-$WHITE_LOSSES-$WHITE_DRAWS, Black: $BLACK_WINS-$BLACK_LOSSES-$BLACK_DRAWS)"
@@ -218,6 +203,12 @@ jobs:
         pattern: benchmark-skill*-chunk*
         merge-multiple: true
 
+    - name: Merge all PGN files
+      run: |
+        for SKILL in 4 5; do
+          cat benchmark-skill$SKILL-chunk*.pgn > benchmark-skill$SKILL-all.pgn 2>/dev/null || echo "No PGN files for skill $SKILL"
+        done
+
     - name: Aggregate results
       run: |
         echo "Aggregating results from all chunks..."
@@ -232,12 +223,9 @@ jobs:
             TOTAL_WINS=0 TOTAL_LOSSES=0 TOTAL_DRAWS=0
             TOTAL_WHITE_WINS=0 TOTAL_WHITE_LOSSES=0 TOTAL_WHITE_DRAWS=0
             TOTAL_BLACK_WINS=0 TOTAL_BLACK_LOSSES=0 TOTAL_BLACK_DRAWS=0
-            TOTAL_CHECKMATES=0 TOTAL_TIMEOUTS=0 TOTAL_STALEMATES=0
-            TOTAL_REPETITION=0 TOTAL_FIFTY_MOVE=0 TOTAL_RESIGNATION=0
 
             for f in results-skill$SKILL-chunk*.txt; do
               if [ -f "$f" ]; then
-                # Source the file to get variables
                 eval "$(grep -E '^[A-Z_]+=' "$f" | sed 's/^[[:space:]]*//')"
                 TOTAL_WINS=$((TOTAL_WINS + WINS))
                 TOTAL_LOSSES=$((TOTAL_LOSSES + LOSSES))
@@ -248,12 +236,6 @@ jobs:
                 TOTAL_BLACK_WINS=$((TOTAL_BLACK_WINS + BLACK_WINS))
                 TOTAL_BLACK_LOSSES=$((TOTAL_BLACK_LOSSES + BLACK_LOSSES))
                 TOTAL_BLACK_DRAWS=$((TOTAL_BLACK_DRAWS + BLACK_DRAWS))
-                TOTAL_CHECKMATES=$((TOTAL_CHECKMATES + CHECKMATES))
-                TOTAL_TIMEOUTS=$((TOTAL_TIMEOUTS + TIMEOUTS))
-                TOTAL_STALEMATES=$((TOTAL_STALEMATES + STALEMATES))
-                TOTAL_REPETITION=$((TOTAL_REPETITION + REPETITION))
-                TOTAL_FIFTY_MOVE=$((TOTAL_FIFTY_MOVE + FIFTY_MOVE))
-                TOTAL_RESIGNATION=$((TOTAL_RESIGNATION + RESIGNATION))
               fi
             done
 
@@ -279,8 +261,12 @@ jobs:
               echo "| As Black | $TOTAL_BLACK_WINS | $TOTAL_BLACK_LOSSES | $TOTAL_BLACK_DRAWS | $BLACK_TOTAL | ${BLACK_WIN_RATE}% |"
             fi
 
-            echo ""
-            echo "**Game endings:** Checkmate: $TOTAL_CHECKMATES | Timeout: $TOTAL_TIMEOUTS | Resignation: $TOTAL_RESIGNATION | Stalemate: $TOTAL_STALEMATES | Repetition: $TOTAL_REPETITION | 50-move: $TOTAL_FIFTY_MOVE"
+            # Parse game endings directly from merged PGN
+            PGN="benchmark-skill$SKILL-all.pgn"
+            if [ -f "$PGN" ]; then
+              echo ""
+              echo "**Game endings:** Checkmate: $(grep -c 'mates}' "$PGN" || echo 0) | Timeout: $(grep -c 'time forfeit}' "$PGN" || echo 0) | Resignation: $(grep -c 'resigns}' "$PGN" || echo 0) | Repetition: $(grep -c '3-fold repetition}' "$PGN" || echo 0) | Stalemate: $(grep -c 'Stalemate' "$PGN" || echo 0)"
+            fi
             echo ""
           done
 
@@ -303,12 +289,6 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: |
         gh pr comment ${{ github.event.pull_request.number }} --body-file pr-comment.md
-
-    - name: Merge all PGN files
-      run: |
-        for SKILL in 4 5; do
-          cat benchmark-skill$SKILL-chunk*.pgn > benchmark-skill$SKILL-all.pgn 2>/dev/null || echo "No PGN files for skill $SKILL"
-        done
 
     - name: Upload aggregated results
       uses: actions/upload-artifact@v4
