@@ -164,10 +164,14 @@ jobs:
         BLACK_LOSSES=$(grep -B5 'Result "1-0"' "$PGN" | grep -c 'Black "moonfish"' || echo 0)
         BLACK_DRAWS=$(grep -B5 'Result "1/2-1/2"' "$PGN" | grep -c 'Black "moonfish"' || echo 0)
 
-        # Parse termination reasons for losses
-        TIMEOUT_LOSSES=$(grep -B10 'Termination "time forfeit"' "$PGN" | grep -E 'Result "0-1".*|Result "1-0"' | wc -l || echo 0)
-        CHECKMATE_LOSSES=$(grep -B10 'Termination "checkmate"' "$PGN" | wc -l || echo 0)
-        ADJUDICATION_LOSSES=$(grep -B10 'Termination "adjudication"' "$PGN" | wc -l || echo 0)
+        # Parse termination reasons from move text (cutechess format)
+        # Count games where moonfish lost by various reasons
+        CHECKMATES=$(grep -c "mates}" "$PGN" || echo 0)
+        TIMEOUTS=$(grep -c "time forfeit}" "$PGN" || echo 0)
+        STALEMATES=$(grep -c "Stalemate" "$PGN" || echo 0)
+        REPETITION=$(grep -c "3-fold repetition}" "$PGN" || echo 0)
+        FIFTY_MOVE=$(grep -c "50-move rule}" "$PGN" || echo 0)
+        RESIGNATION=$(grep -c "resigns}" "$PGN" || echo 0)
 
         # Save detailed results
         cat > results-skill$SKILL-chunk$CHUNK.txt << EOF
@@ -181,9 +185,12 @@ jobs:
         BLACK_WINS=$BLACK_WINS
         BLACK_LOSSES=$BLACK_LOSSES
         BLACK_DRAWS=$BLACK_DRAWS
-        TIMEOUT_LOSSES=$TIMEOUT_LOSSES
-        CHECKMATE_LOSSES=$CHECKMATE_LOSSES
-        ADJUDICATION_LOSSES=$ADJUDICATION_LOSSES
+        CHECKMATES=$CHECKMATES
+        TIMEOUTS=$TIMEOUTS
+        STALEMATES=$STALEMATES
+        REPETITION=$REPETITION
+        FIFTY_MOVE=$FIFTY_MOVE
+        RESIGNATION=$RESIGNATION
         EOF
 
         echo "Skill $SKILL, Chunk $CHUNK: W=$WINS L=$LOSSES D=$DRAWS (White: $WHITE_WINS-$WHITE_LOSSES-$WHITE_DRAWS, Black: $BLACK_WINS-$BLACK_LOSSES-$BLACK_DRAWS)"
@@ -225,7 +232,8 @@ jobs:
             TOTAL_WINS=0 TOTAL_LOSSES=0 TOTAL_DRAWS=0
             TOTAL_WHITE_WINS=0 TOTAL_WHITE_LOSSES=0 TOTAL_WHITE_DRAWS=0
             TOTAL_BLACK_WINS=0 TOTAL_BLACK_LOSSES=0 TOTAL_BLACK_DRAWS=0
-            TOTAL_TIMEOUT=0 TOTAL_CHECKMATE=0 TOTAL_ADJUDICATION=0
+            TOTAL_CHECKMATES=0 TOTAL_TIMEOUTS=0 TOTAL_STALEMATES=0
+            TOTAL_REPETITION=0 TOTAL_FIFTY_MOVE=0 TOTAL_RESIGNATION=0
 
             for f in results-skill$SKILL-chunk*.txt; do
               if [ -f "$f" ]; then
@@ -240,9 +248,12 @@ jobs:
                 TOTAL_BLACK_WINS=$((TOTAL_BLACK_WINS + BLACK_WINS))
                 TOTAL_BLACK_LOSSES=$((TOTAL_BLACK_LOSSES + BLACK_LOSSES))
                 TOTAL_BLACK_DRAWS=$((TOTAL_BLACK_DRAWS + BLACK_DRAWS))
-                TOTAL_TIMEOUT=$((TOTAL_TIMEOUT + TIMEOUT_LOSSES))
-                TOTAL_CHECKMATE=$((TOTAL_CHECKMATE + CHECKMATE_LOSSES))
-                TOTAL_ADJUDICATION=$((TOTAL_ADJUDICATION + ADJUDICATION_LOSSES))
+                TOTAL_CHECKMATES=$((TOTAL_CHECKMATES + CHECKMATES))
+                TOTAL_TIMEOUTS=$((TOTAL_TIMEOUTS + TIMEOUTS))
+                TOTAL_STALEMATES=$((TOTAL_STALEMATES + STALEMATES))
+                TOTAL_REPETITION=$((TOTAL_REPETITION + REPETITION))
+                TOTAL_FIFTY_MOVE=$((TOTAL_FIFTY_MOVE + FIFTY_MOVE))
+                TOTAL_RESIGNATION=$((TOTAL_RESIGNATION + RESIGNATION))
               fi
             done
 
@@ -269,14 +280,14 @@ jobs:
             fi
 
             echo ""
-            echo "**Loss reasons:** Timeout: $TOTAL_TIMEOUT | Checkmate: $TOTAL_CHECKMATE | Adjudication: $TOTAL_ADJUDICATION"
+            echo "**Game endings:** Checkmate: $TOTAL_CHECKMATES | Timeout: $TOTAL_TIMEOUTS | Resignation: $TOTAL_RESIGNATION | Stalemate: $TOTAL_STALEMATES | Repetition: $TOTAL_REPETITION | 50-move: $TOTAL_FIFTY_MOVE"
             echo ""
           done
 
           echo "<details><summary>Configuration</summary>"
           echo ""
-          echo "- 10 chunks × 10 rounds × 2 games/round (repeat) × 2 skill levels = 400 total games"
-          echo "- Each opening played twice with colors reversed for fairness"
+          echo "- 10 chunks × 10 rounds × 2 skill levels = 200 total games"
+          echo "- Each opening played with colors reversed (-repeat) for fairness"
           echo "- Moonfish: 60s per move"
           echo "- Stockfish: 60+5 time control"
           echo ""
