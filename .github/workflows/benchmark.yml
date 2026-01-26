@@ -267,7 +267,7 @@ jobs:
               ENDINGS=$(grep -oE ', [^}]+\}' "$PGN" | sed 's/, //; s/}//' | grep -v 'mates' | sort | uniq -c | sort -rn)
               if [ -n "$ENDINGS" ]; then
                 echo ""
-                echo "**Other game endings:**"
+                echo "**Non-checkmate endings:**"
                 echo "$ENDINGS" | while read count ending; do
                   echo "- $ending: $count"
                 done
