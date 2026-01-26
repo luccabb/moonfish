@@ -1,0 +1,171 @@
+name: Stockfish Benchmark
+
+on:
+  pull_request:
+    branches: [ master ]
+
+permissions:
+  contents: read
+
+env:
+  GIT_LFS_SKIP_SMUDGE: 1
+  MOONFISH_OPENING_BOOK: ${{ github.workspace }}/opening_book/cerebellum.bin
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    env:
+      UV_SYSTEM_PYTHON: 1
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        lfs: false
+        fetch-depth: 0
+
+    - name: Ensure opening book
+      run: |
+        set -euo pipefail
+
+        if [ -f opening_book/cerebellum.bin ]; then
+          if head -1 opening_book/cerebellum.bin | grep -q "git-lfs"; then
+            echo "LFS pointer detected; downloading opening book..."
+            rm -f opening_book/cerebellum.bin
+          else
+            echo "Opening book already present."
+            exit 0
+          fi
+        fi
+
+        echo "Downloading full opening book from release..."
+        curl -L -o opening_book/cerebellum.bin "https://github.com/luccabb/moonfish/releases/download/v1.0.0/cerebellum.bin"
+
+    - name: Verify opening book
+      run: |
+        ls -lh opening_book/cerebellum.bin
+        python - <<'PY'
+        import os, sys
+        path = "opening_book/cerebellum.bin"
+        size = os.path.getsize(path)
+        print(f"opening book size: {size} bytes")
+        if size < 10_000_000:
+            print("opening book too small; likely an LFS pointer", file=sys.stderr)
+            sys.exit(1)
+        PY
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+        cache-dependency-glob: "requirements.txt"
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: make install
+
+    - name: Validate opening book with python-chess
+      run: |
+        python - <<'PY'
+        import chess
+        import chess.polyglot
+        book_path = "opening_book/cerebellum.bin"
+        with chess.polyglot.MemoryMappedReader(book_path) as reader:
+            entry = reader.find(chess.Board())
+        print(f"book entry: {entry.move.uci()}")
+        PY
+
+    - name: Install Stockfish
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y stockfish
+
+    - name: Install cutechess-cli dependencies
+      run: |
+        sudo apt-get install -y cmake qt5-qmake qtbase5-dev qtbase5-dev-tools libqt5svg5-dev
+
+    - name: Cache cutechess-cli
+      id: cache-cutechess
+      uses: actions/cache@v4
+      with:
+        path: /usr/local/bin/cutechess-cli
+        key: cutechess-cli-1.4.0
+
+    - name: Build cutechess-cli
+      if: steps.cache-cutechess.outputs.cache-hit != 'true'
+      run: |
+        git clone --depth 1 --branch v1.4.0 https://github.com/cutechess/cutechess.git /tmp/cutechess
+        cd /tmp/cutechess
+        mkdir build && cd build
+        cmake ..
+        make -j$(nproc)
+        sudo cp cutechess-cli /usr/local/bin/
+
+    - name: Build moonfish binary
+      run: make build-lichess
+
+    - name: Run Stockfish benchmark
+      run: |
+        echo "Running moonfish vs Stockfish benchmark..."
+        echo "Stockfish skill level: 5"
+        echo "Moonfish: 60s per move, Stockfish: 60+5 time control"
+        echo "Rounds: 20, Concurrency: $(nproc)"
+        echo ""
+
+        cutechess-cli \
+          -engine name=moonfish cmd=./dist/moonfish dir=. proto=uci tc=inf st=60 timemargin=10000 \
+          -engine name=stockfish cmd=stockfish proto=uci option.Skill\ Level=5 option.Threads=1 tc=60+5 timemargin=10000 \
+          -rounds 20 \
+          -concurrency $(nproc) \
+          -pgnout benchmark.pgn \
+          -recover \
+          2>&1 | tee benchmark.log
+
+        echo ""
+        echo "=== Benchmark Results ==="
+        tail -20 benchmark.log
+
+    - name: Parse results
+      run: |
+        # Extract score line
+        SCORE=$(grep "Score of moonfish vs stockfish:" benchmark.log | tail -1)
+
+        # Parse wins/losses/draws
+        WINS=$(echo "$SCORE" | sed -E 's/.*: ([0-9]+) - ([0-9]+) - ([0-9]+).*/\1/')
+        LOSSES=$(echo "$SCORE" | sed -E 's/.*: ([0-9]+) - ([0-9]+) - ([0-9]+).*/\2/')
+        DRAWS=$(echo "$SCORE" | sed -E 's/.*: ([0-9]+) - ([0-9]+) - ([0-9]+).*/\3/')
+        TOTAL=$((WINS + LOSSES + DRAWS))
+
+        echo "### Stockfish Benchmark Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Opponent:** Stockfish Skill Level 5" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Wins | Losses | Draws | Total |" >> $GITHUB_STEP_SUMMARY
+        echo "|------|--------|-------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| $WINS | $LOSSES | $DRAWS | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ "$TOTAL" -gt 0 ]; then
+          WIN_RATE=$(echo "scale=1; $WINS * 100 / $TOTAL" | bc)
+          LOSS_RATE=$(echo "scale=1; $LOSSES * 100 / $TOTAL" | bc)
+          echo "**Win rate: ${WIN_RATE}% | Loss rate: ${LOSS_RATE}%**" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        # Also print to console
+        echo ""
+        echo "=== SUMMARY ==="
+        echo "vs Stockfish Skill Level 5"
+        echo "Wins: $WINS | Losses: $LOSSES | Draws: $DRAWS"
+        echo "Win rate: ${WIN_RATE}%"
+
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: benchmark-results
+        path: |
+          benchmark.pgn
+          benchmark.log

@@ -1,4 +1,6 @@
+import os
 from enum import Enum
+from pathlib import Path
 
 from chess import Board, Move, polyglot
 
@@ -46,6 +48,25 @@ def get_engine(config: Config):
     raise Exception("algorithm not supported")
 
 
+def _opening_book_path() -> str:
+    """
+    Resolve the opening book path, allowing overrides for CI or custom installs.
+    """
+    env_path = os.getenv("MOONFISH_OPENING_BOOK")
+    if env_path and Path(env_path).is_file():
+        return env_path
+
+    cwd_path = Path("opening_book/cerebellum.bin")
+    if cwd_path.is_file():
+        return str(cwd_path)
+
+    repo_path = Path(__file__).resolve().parents[1] / "opening_book" / "cerebellum.bin"
+    if repo_path.is_file():
+        return str(repo_path)
+
+    return str(cwd_path)
+
+
 def find_best_move(board: Board, engine: ChessEngine) -> Move:
     """
     Finds the best move for the given board using the given engine.
@@ -61,9 +82,7 @@ def find_best_move(board: Board, engine: ChessEngine) -> Move:
     # if it fails we search on our engine. The first (12-20) moves should be
     # available in the opening book, so our engine starts playing after that.
     try:
-        best_move = (
-            polyglot.MemoryMappedReader("opening_book/cerebellum.bin").find(board).move
-        )
+        best_move = polyglot.MemoryMappedReader(_opening_book_path()).find(board).move
     except (ValueError, OSError, AttributeError, IndexError):
         best_move = engine.search_move(board)
     return best_move
