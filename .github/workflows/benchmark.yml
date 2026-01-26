@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 env:
   GIT_LFS_SKIP_SMUDGE: 1
@@ -171,6 +172,8 @@ jobs:
     needs: benchmark
     if: always()
     steps:
+    - uses: actions/checkout@v4
+
     - name: Download all chunk results
       uses: actions/download-artifact@v4
       with:
@@ -181,45 +184,63 @@ jobs:
       run: |
         echo "Aggregating results from all chunks..."
 
-        echo "### Stockfish Benchmark Results (Aggregated)" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "| Skill Level | Wins | Losses | Draws | Total | Win % | Loss % |" >> $GITHUB_STEP_SUMMARY
-        echo "|-------------|------|--------|-------|-------|-------|--------|" >> $GITHUB_STEP_SUMMARY
+        # Build comment body
+        {
+          echo "## 🔬 Stockfish Benchmark Results"
+          echo ""
+          echo "| Skill Level | Wins | Losses | Draws | Total | Win % | Loss % |"
+          echo "|-------------|------|--------|-------|-------|-------|--------|"
 
-        for SKILL in 4 5; do
-          TOTAL_WINS=0
-          TOTAL_LOSSES=0
-          TOTAL_DRAWS=0
+          for SKILL in 4 5; do
+            TOTAL_WINS=0
+            TOTAL_LOSSES=0
+            TOTAL_DRAWS=0
 
-          for f in results-skill$SKILL-chunk*.txt; do
-            if [ -f "$f" ]; then
-              read FILE_SKILL WINS LOSSES DRAWS < "$f"
-              echo "$(basename $f): W=$WINS L=$LOSSES D=$DRAWS"
-              TOTAL_WINS=$((TOTAL_WINS + WINS))
-              TOTAL_LOSSES=$((TOTAL_LOSSES + LOSSES))
-              TOTAL_DRAWS=$((TOTAL_DRAWS + DRAWS))
+            for f in results-skill$SKILL-chunk*.txt; do
+              if [ -f "$f" ]; then
+                read FILE_SKILL WINS LOSSES DRAWS < "$f"
+                echo "$(basename $f): W=$WINS L=$LOSSES D=$DRAWS" >&2
+                TOTAL_WINS=$((TOTAL_WINS + WINS))
+                TOTAL_LOSSES=$((TOTAL_LOSSES + LOSSES))
+                TOTAL_DRAWS=$((TOTAL_DRAWS + DRAWS))
+              fi
+            done
+
+            TOTAL=$((TOTAL_WINS + TOTAL_LOSSES + TOTAL_DRAWS))
+
+            echo "" >&2
+            echo "=== SKILL LEVEL $SKILL RESULTS ===" >&2
+            echo "Total games: $TOTAL" >&2
+            echo "Wins: $TOTAL_WINS | Losses: $TOTAL_LOSSES | Draws: $TOTAL_DRAWS" >&2
+
+            if [ "$TOTAL" -gt 0 ]; then
+              WIN_RATE=$(echo "scale=1; $TOTAL_WINS * 100 / $TOTAL" | bc)
+              LOSS_RATE=$(echo "scale=1; $TOTAL_LOSSES * 100 / $TOTAL" | bc)
+              echo "| $SKILL | $TOTAL_WINS | $TOTAL_LOSSES | $TOTAL_DRAWS | $TOTAL | ${WIN_RATE}% | ${LOSS_RATE}% |"
+            else
+              echo "| $SKILL | $TOTAL_WINS | $TOTAL_LOSSES | $TOTAL_DRAWS | $TOTAL | N/A | N/A |"
             fi
           done
 
-          TOTAL=$((TOTAL_WINS + TOTAL_LOSSES + TOTAL_DRAWS))
-
           echo ""
-          echo "=== SKILL LEVEL $SKILL RESULTS ==="
-          echo "Total games: $TOTAL"
-          echo "Wins: $TOTAL_WINS | Losses: $TOTAL_LOSSES | Draws: $TOTAL_DRAWS"
+          echo "<details><summary>Configuration</summary>"
+          echo ""
+          echo "- 10 parallel chunks × 10 rounds × 2 skill levels = 200 total games"
+          echo "- Moonfish: 60s per move"
+          echo "- Stockfish: 60+5 time control"
+          echo ""
+          echo "</details>"
+        } > pr-comment.md
 
-          if [ "$TOTAL" -gt 0 ]; then
-            WIN_RATE=$(echo "scale=1; $TOTAL_WINS * 100 / $TOTAL" | bc)
-            LOSS_RATE=$(echo "scale=1; $TOTAL_LOSSES * 100 / $TOTAL" | bc)
-            echo "| $SKILL | $TOTAL_WINS | $TOTAL_LOSSES | $TOTAL_DRAWS | $TOTAL | ${WIN_RATE}% | ${LOSS_RATE}% |" >> $GITHUB_STEP_SUMMARY
-            echo "Win rate: ${WIN_RATE}% | Loss rate: ${LOSS_RATE}%"
-          else
-            echo "| $SKILL | $TOTAL_WINS | $TOTAL_LOSSES | $TOTAL_DRAWS | $TOTAL | N/A | N/A |" >> $GITHUB_STEP_SUMMARY
-          fi
-        done
+        # Also write to step summary
+        cat pr-comment.md >> $GITHUB_STEP_SUMMARY
 
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Configuration:** 10 parallel chunks × 10 rounds × 2 skill levels = 200 total games" >> $GITHUB_STEP_SUMMARY
+    - name: Comment on PR
+      if: github.event_name == 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh pr comment ${{ github.event.pull_request.number }} --body-file pr-comment.md
 
     - name: Merge all PGN files
       run: |
