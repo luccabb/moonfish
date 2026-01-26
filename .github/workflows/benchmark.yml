@@ -14,6 +14,11 @@ env:
 jobs:
   benchmark:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        chunk: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # 10 parallel jobs, 10 rounds each = 100 total per skill level
+        skill_level: [4, 5]  # Test against both skill levels
     env:
       UV_SYSTEM_PYTHON: 1
 
@@ -109,63 +114,123 @@ jobs:
 
     - name: Run Stockfish benchmark
       run: |
-        echo "Running moonfish vs Stockfish benchmark..."
-        echo "Stockfish skill level: 5"
+        CHUNK=${{ matrix.chunk }}
+        SKILL=${{ matrix.skill_level }}
+        ROUNDS_PER_CHUNK=10
+        SEED=$((CHUNK * 1000 + SKILL * 100 + 42))  # Different seed per chunk/skill for opening variety
+
+        echo "Running moonfish vs Stockfish benchmark (chunk $CHUNK, skill $SKILL)..."
+        echo "Stockfish skill level: $SKILL"
         echo "Moonfish: 60s per move, Stockfish: 60+5 time control"
-        echo "Rounds: 20, Concurrency: $(nproc)"
+        echo "Rounds: $ROUNDS_PER_CHUNK, Concurrency: $(nproc), Seed: $SEED"
         echo ""
 
         cutechess-cli \
           -engine name=moonfish cmd=./dist/moonfish dir=. proto=uci tc=inf st=60 timemargin=10000 \
-          -engine name=stockfish cmd=stockfish proto=uci option.Skill\ Level=5 option.Threads=1 tc=60+5 timemargin=10000 \
-          -rounds 20 \
+          -engine name=stockfish cmd=stockfish proto=uci option.Skill\ Level=$SKILL option.Threads=1 tc=60+5 timemargin=10000 \
+          -rounds $ROUNDS_PER_CHUNK \
           -concurrency $(nproc) \
-          -pgnout benchmark.pgn \
+          -pgnout benchmark-skill$SKILL-chunk$CHUNK.pgn \
+          -srand $SEED \
           -recover \
-          2>&1 | tee benchmark.log
+          2>&1 | tee benchmark-skill$SKILL-chunk$CHUNK.log
 
         echo ""
-        echo "=== Benchmark Results ==="
-        tail -20 benchmark.log
+        echo "=== Benchmark Results (Skill $SKILL, Chunk $CHUNK) ==="
+        tail -20 benchmark-skill$SKILL-chunk$CHUNK.log
 
     - name: Parse results
       run: |
+        CHUNK=${{ matrix.chunk }}
+        SKILL=${{ matrix.skill_level }}
         # Extract score line
-        SCORE=$(grep "Score of moonfish vs stockfish:" benchmark.log | tail -1)
+        SCORE=$(grep "Score of moonfish vs stockfish:" benchmark-skill$SKILL-chunk$CHUNK.log | tail -1)
 
         # Parse wins/losses/draws
         WINS=$(echo "$SCORE" | sed -E 's/.*: ([0-9]+) - ([0-9]+) - ([0-9]+).*/\1/')
         LOSSES=$(echo "$SCORE" | sed -E 's/.*: ([0-9]+) - ([0-9]+) - ([0-9]+).*/\2/')
         DRAWS=$(echo "$SCORE" | sed -E 's/.*: ([0-9]+) - ([0-9]+) - ([0-9]+).*/\3/')
-        TOTAL=$((WINS + LOSSES + DRAWS))
 
-        echo "### Stockfish Benchmark Results" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Opponent:** Stockfish Skill Level 5" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "| Wins | Losses | Draws | Total |" >> $GITHUB_STEP_SUMMARY
-        echo "|------|--------|-------|-------|" >> $GITHUB_STEP_SUMMARY
-        echo "| $WINS | $LOSSES | $DRAWS | $TOTAL |" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
+        # Save results to a simple file for aggregation (include skill level)
+        echo "$SKILL $WINS $LOSSES $DRAWS" > results-skill$SKILL-chunk$CHUNK.txt
 
-        if [ "$TOTAL" -gt 0 ]; then
-          WIN_RATE=$(echo "scale=1; $WINS * 100 / $TOTAL" | bc)
-          LOSS_RATE=$(echo "scale=1; $LOSSES * 100 / $TOTAL" | bc)
-          echo "**Win rate: ${WIN_RATE}% | Loss rate: ${LOSS_RATE}%**" >> $GITHUB_STEP_SUMMARY
-        fi
+        echo "Skill $SKILL, Chunk $CHUNK: Wins=$WINS, Losses=$LOSSES, Draws=$DRAWS"
 
-        # Also print to console
-        echo ""
-        echo "=== SUMMARY ==="
-        echo "vs Stockfish Skill Level 5"
-        echo "Wins: $WINS | Losses: $LOSSES | Draws: $DRAWS"
-        echo "Win rate: ${WIN_RATE}%"
-
-    - name: Upload benchmark results
+    - name: Upload chunk results
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: benchmark-results
+        name: benchmark-skill${{ matrix.skill_level }}-chunk${{ matrix.chunk }}
         path: |
-          benchmark.pgn
-          benchmark.log
+          benchmark-skill${{ matrix.skill_level }}-chunk${{ matrix.chunk }}.pgn
+          benchmark-skill${{ matrix.skill_level }}-chunk${{ matrix.chunk }}.log
+          results-skill${{ matrix.skill_level }}-chunk${{ matrix.chunk }}.txt
+
+  aggregate:
+    runs-on: ubuntu-latest
+    needs: benchmark
+    if: always()
+    steps:
+    - name: Download all chunk results
+      uses: actions/download-artifact@v4
+      with:
+        pattern: benchmark-skill*-chunk*
+        merge-multiple: true
+
+    - name: Aggregate results
+      run: |
+        echo "Aggregating results from all chunks..."
+
+        echo "### Stockfish Benchmark Results (Aggregated)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Skill Level | Wins | Losses | Draws | Total | Win % | Loss % |" >> $GITHUB_STEP_SUMMARY
+        echo "|-------------|------|--------|-------|-------|-------|--------|" >> $GITHUB_STEP_SUMMARY
+
+        for SKILL in 4 5; do
+          TOTAL_WINS=0
+          TOTAL_LOSSES=0
+          TOTAL_DRAWS=0
+
+          for f in results-skill$SKILL-chunk*.txt; do
+            if [ -f "$f" ]; then
+              read FILE_SKILL WINS LOSSES DRAWS < "$f"
+              echo "$(basename $f): W=$WINS L=$LOSSES D=$DRAWS"
+              TOTAL_WINS=$((TOTAL_WINS + WINS))
+              TOTAL_LOSSES=$((TOTAL_LOSSES + LOSSES))
+              TOTAL_DRAWS=$((TOTAL_DRAWS + DRAWS))
+            fi
+          done
+
+          TOTAL=$((TOTAL_WINS + TOTAL_LOSSES + TOTAL_DRAWS))
+
+          echo ""
+          echo "=== SKILL LEVEL $SKILL RESULTS ==="
+          echo "Total games: $TOTAL"
+          echo "Wins: $TOTAL_WINS | Losses: $TOTAL_LOSSES | Draws: $TOTAL_DRAWS"
+
+          if [ "$TOTAL" -gt 0 ]; then
+            WIN_RATE=$(echo "scale=1; $TOTAL_WINS * 100 / $TOTAL" | bc)
+            LOSS_RATE=$(echo "scale=1; $TOTAL_LOSSES * 100 / $TOTAL" | bc)
+            echo "| $SKILL | $TOTAL_WINS | $TOTAL_LOSSES | $TOTAL_DRAWS | $TOTAL | ${WIN_RATE}% | ${LOSS_RATE}% |" >> $GITHUB_STEP_SUMMARY
+            echo "Win rate: ${WIN_RATE}% | Loss rate: ${LOSS_RATE}%"
+          else
+            echo "| $SKILL | $TOTAL_WINS | $TOTAL_LOSSES | $TOTAL_DRAWS | $TOTAL | N/A | N/A |" >> $GITHUB_STEP_SUMMARY
+          fi
+        done
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Configuration:** 10 parallel chunks × 10 rounds × 2 skill levels = 200 total games" >> $GITHUB_STEP_SUMMARY
+
+    - name: Merge all PGN files
+      run: |
+        for SKILL in 4 5; do
+          cat benchmark-skill$SKILL-chunk*.pgn > benchmark-skill$SKILL-all.pgn 2>/dev/null || echo "No PGN files for skill $SKILL"
+        done
+
+    - name: Upload aggregated results
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-aggregated
+        path: |
+          benchmark-skill*-all.pgn
+          results-*.txt
