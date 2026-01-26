@@ -261,11 +261,14 @@ jobs:
               echo "| As Black | $TOTAL_BLACK_WINS | $TOTAL_BLACK_LOSSES | $TOTAL_BLACK_DRAWS | $BLACK_TOTAL | ${BLACK_WIN_RATE}% |"
             fi
 
-            # Parse game endings directly from merged PGN
+            # Parse game endings directly from merged PGN - extract termination text and count
             PGN="benchmark-skill$SKILL-all.pgn"
             if [ -f "$PGN" ]; then
               echo ""
-              echo "**Game endings:** Checkmate: $(grep -c 'mates}' "$PGN" || echo 0) | Timeout: $(grep -c 'time forfeit}' "$PGN" || echo 0) | Resignation: $(grep -c 'resigns}' "$PGN" || echo 0) | Repetition: $(grep -c '3-fold repetition}' "$PGN" || echo 0) | Stalemate: $(grep -c 'Stalemate' "$PGN" || echo 0)"
+              echo "**Game endings:**"
+              grep -oE ', [^}]+\}' "$PGN" | sed 's/, //; s/}//' | sort | uniq -c | sort -rn | while read count ending; do
+                echo "- $ending: $count"
+              done
             fi
             echo ""
           done
