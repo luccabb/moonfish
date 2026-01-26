@@ -145,18 +145,48 @@ jobs:
       run: |
         CHUNK=${{ matrix.chunk }}
         SKILL=${{ matrix.skill_level }}
-        # Extract score line
-        SCORE=$(grep "Score of moonfish vs stockfish:" benchmark-skill$SKILL-chunk$CHUNK.log | tail -1)
+        PGN="benchmark-skill$SKILL-chunk$CHUNK.pgn"
 
-        # Parse wins/losses/draws
+        # Extract score line from log
+        SCORE=$(grep "Score of moonfish vs stockfish:" benchmark-skill$SKILL-chunk$CHUNK.log | tail -1)
         WINS=$(echo "$SCORE" | sed -E 's/.*: ([0-9]+) - ([0-9]+) - ([0-9]+).*/\1/')
         LOSSES=$(echo "$SCORE" | sed -E 's/.*: ([0-9]+) - ([0-9]+) - ([0-9]+).*/\2/')
         DRAWS=$(echo "$SCORE" | sed -E 's/.*: ([0-9]+) - ([0-9]+) - ([0-9]+).*/\3/')
 
-        # Save results to a simple file for aggregation (include skill level)
-        echo "$SKILL $WINS $LOSSES $DRAWS" > results-skill$SKILL-chunk$CHUNK.txt
+        # Parse PGN for detailed stats
+        # Moonfish as White: wins/losses/draws
+        WHITE_WINS=$(grep -B5 'Result "1-0"' "$PGN" | grep -c 'White "moonfish"' || echo 0)
+        WHITE_LOSSES=$(grep -B5 'Result "0-1"' "$PGN" | grep -c 'White "moonfish"' || echo 0)
+        WHITE_DRAWS=$(grep -B5 'Result "1/2-1/2"' "$PGN" | grep -c 'White "moonfish"' || echo 0)
 
-        echo "Skill $SKILL, Chunk $CHUNK: Wins=$WINS, Losses=$LOSSES, Draws=$DRAWS"
+        # Moonfish as Black: wins/losses/draws
+        BLACK_WINS=$(grep -B5 'Result "0-1"' "$PGN" | grep -c 'Black "moonfish"' || echo 0)
+        BLACK_LOSSES=$(grep -B5 'Result "1-0"' "$PGN" | grep -c 'Black "moonfish"' || echo 0)
+        BLACK_DRAWS=$(grep -B5 'Result "1/2-1/2"' "$PGN" | grep -c 'Black "moonfish"' || echo 0)
+
+        # Parse termination reasons for losses
+        TIMEOUT_LOSSES=$(grep -B10 'Termination "time forfeit"' "$PGN" | grep -E 'Result "0-1".*|Result "1-0"' | wc -l || echo 0)
+        CHECKMATE_LOSSES=$(grep -B10 'Termination "checkmate"' "$PGN" | wc -l || echo 0)
+        ADJUDICATION_LOSSES=$(grep -B10 'Termination "adjudication"' "$PGN" | wc -l || echo 0)
+
+        # Save detailed results
+        cat > results-skill$SKILL-chunk$CHUNK.txt << EOF
+        SKILL=$SKILL
+        WINS=$WINS
+        LOSSES=$LOSSES
+        DRAWS=$DRAWS
+        WHITE_WINS=$WHITE_WINS
+        WHITE_LOSSES=$WHITE_LOSSES
+        WHITE_DRAWS=$WHITE_DRAWS
+        BLACK_WINS=$BLACK_WINS
+        BLACK_LOSSES=$BLACK_LOSSES
+        BLACK_DRAWS=$BLACK_DRAWS
+        TIMEOUT_LOSSES=$TIMEOUT_LOSSES
+        CHECKMATE_LOSSES=$CHECKMATE_LOSSES
+        ADJUDICATION_LOSSES=$ADJUDICATION_LOSSES
+        EOF
+
+        echo "Skill $SKILL, Chunk $CHUNK: W=$WINS L=$LOSSES D=$DRAWS (White: $WHITE_WINS-$WHITE_LOSSES-$WHITE_DRAWS, Black: $BLACK_WINS-$BLACK_LOSSES-$BLACK_DRAWS)"
 
     - name: Upload chunk results
       uses: actions/upload-artifact@v4
@@ -189,41 +219,60 @@ jobs:
         {
           echo "## 🔬 Stockfish Benchmark Results"
           echo ""
-          echo "| Skill Level | Wins | Losses | Draws | Total | Win % | Loss % |"
-          echo "|-------------|------|--------|-------|-------|-------|--------|"
 
           for SKILL in 4 5; do
-            TOTAL_WINS=0
-            TOTAL_LOSSES=0
-            TOTAL_DRAWS=0
+            # Initialize counters
+            TOTAL_WINS=0 TOTAL_LOSSES=0 TOTAL_DRAWS=0
+            TOTAL_WHITE_WINS=0 TOTAL_WHITE_LOSSES=0 TOTAL_WHITE_DRAWS=0
+            TOTAL_BLACK_WINS=0 TOTAL_BLACK_LOSSES=0 TOTAL_BLACK_DRAWS=0
+            TOTAL_TIMEOUT=0 TOTAL_CHECKMATE=0 TOTAL_ADJUDICATION=0
 
             for f in results-skill$SKILL-chunk*.txt; do
               if [ -f "$f" ]; then
-                read FILE_SKILL WINS LOSSES DRAWS < "$f"
-                echo "$(basename $f): W=$WINS L=$LOSSES D=$DRAWS" >&2
+                # Source the file to get variables
+                eval "$(grep -E '^[A-Z_]+=' "$f" | sed 's/^[[:space:]]*//')"
                 TOTAL_WINS=$((TOTAL_WINS + WINS))
                 TOTAL_LOSSES=$((TOTAL_LOSSES + LOSSES))
                 TOTAL_DRAWS=$((TOTAL_DRAWS + DRAWS))
+                TOTAL_WHITE_WINS=$((TOTAL_WHITE_WINS + WHITE_WINS))
+                TOTAL_WHITE_LOSSES=$((TOTAL_WHITE_LOSSES + WHITE_LOSSES))
+                TOTAL_WHITE_DRAWS=$((TOTAL_WHITE_DRAWS + WHITE_DRAWS))
+                TOTAL_BLACK_WINS=$((TOTAL_BLACK_WINS + BLACK_WINS))
+                TOTAL_BLACK_LOSSES=$((TOTAL_BLACK_LOSSES + BLACK_LOSSES))
+                TOTAL_BLACK_DRAWS=$((TOTAL_BLACK_DRAWS + BLACK_DRAWS))
+                TOTAL_TIMEOUT=$((TOTAL_TIMEOUT + TIMEOUT_LOSSES))
+                TOTAL_CHECKMATE=$((TOTAL_CHECKMATE + CHECKMATE_LOSSES))
+                TOTAL_ADJUDICATION=$((TOTAL_ADJUDICATION + ADJUDICATION_LOSSES))
               fi
             done
 
             TOTAL=$((TOTAL_WINS + TOTAL_LOSSES + TOTAL_DRAWS))
+            WHITE_TOTAL=$((TOTAL_WHITE_WINS + TOTAL_WHITE_LOSSES + TOTAL_WHITE_DRAWS))
+            BLACK_TOTAL=$((TOTAL_BLACK_WINS + TOTAL_BLACK_LOSSES + TOTAL_BLACK_DRAWS))
 
-            echo "" >&2
-            echo "=== SKILL LEVEL $SKILL RESULTS ===" >&2
-            echo "Total games: $TOTAL" >&2
-            echo "Wins: $TOTAL_WINS | Losses: $TOTAL_LOSSES | Draws: $TOTAL_DRAWS" >&2
+            echo "### vs Stockfish Skill Level $SKILL"
+            echo ""
+            echo "| Metric | Wins | Losses | Draws | Total | Win % |"
+            echo "|--------|------|--------|-------|-------|-------|"
 
             if [ "$TOTAL" -gt 0 ]; then
               WIN_RATE=$(echo "scale=1; $TOTAL_WINS * 100 / $TOTAL" | bc)
-              LOSS_RATE=$(echo "scale=1; $TOTAL_LOSSES * 100 / $TOTAL" | bc)
-              echo "| $SKILL | $TOTAL_WINS | $TOTAL_LOSSES | $TOTAL_DRAWS | $TOTAL | ${WIN_RATE}% | ${LOSS_RATE}% |"
-            else
-              echo "| $SKILL | $TOTAL_WINS | $TOTAL_LOSSES | $TOTAL_DRAWS | $TOTAL | N/A | N/A |"
+              echo "| **Overall** | $TOTAL_WINS | $TOTAL_LOSSES | $TOTAL_DRAWS | $TOTAL | ${WIN_RATE}% |"
             fi
+            if [ "$WHITE_TOTAL" -gt 0 ]; then
+              WHITE_WIN_RATE=$(echo "scale=1; $TOTAL_WHITE_WINS * 100 / $WHITE_TOTAL" | bc)
+              echo "| As White | $TOTAL_WHITE_WINS | $TOTAL_WHITE_LOSSES | $TOTAL_WHITE_DRAWS | $WHITE_TOTAL | ${WHITE_WIN_RATE}% |"
+            fi
+            if [ "$BLACK_TOTAL" -gt 0 ]; then
+              BLACK_WIN_RATE=$(echo "scale=1; $TOTAL_BLACK_WINS * 100 / $BLACK_TOTAL" | bc)
+              echo "| As Black | $TOTAL_BLACK_WINS | $TOTAL_BLACK_LOSSES | $TOTAL_BLACK_DRAWS | $BLACK_TOTAL | ${BLACK_WIN_RATE}% |"
+            fi
+
+            echo ""
+            echo "**Loss reasons:** Timeout: $TOTAL_TIMEOUT | Checkmate: $TOTAL_CHECKMATE | Adjudication: $TOTAL_ADJUDICATION"
+            echo ""
           done
 
-          echo ""
           echo "<details><summary>Configuration</summary>"
           echo ""
           echo "- 10 chunks × 10 rounds × 2 games/round (repeat) × 2 skill levels = 400 total games"
