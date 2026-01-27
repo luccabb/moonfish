@@ -384,3 +384,4 @@ class AlphaBeta:
         )[1]
         assert best_move is not None, "Best move from root should not be None"
         return best_move
+# Trigger
