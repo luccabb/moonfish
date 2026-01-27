@@ -13,8 +13,20 @@ env:
   MOONFISH_OPENING_BOOK: ${{ github.workspace }}/opening_book/cerebellum.bin
 
 jobs:
+  react-start:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+    - name: Add eyes reaction to PR
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/reactions \
+          -f content='eyes' --silent || true
+
   benchmark:
     runs-on: ubuntu-latest
+    needs: react-start
     strategy:
       fail-fast: false
       matrix:
@@ -295,6 +307,14 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: |
         gh pr comment ${{ github.event.pull_request.number }} --body-file pr-comment.md
+
+    - name: Add thumbs up reaction to PR
+      if: github.event_name == 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/reactions \
+          -f content='+1' --silent || true
 
     - name: Upload aggregated results
       uses: actions/upload-artifact@v4
