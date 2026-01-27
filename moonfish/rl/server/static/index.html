@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moonfish Chess</title>
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+        }
+        .subtitle a { color: #4da6ff; }
+        #board-container {
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto 20px;
+        }
+        #board { width: 100%; }
+        .info-panel {
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .status { font-size: 1.2em; margin-bottom: 10px; }
+        .controls { display: flex; gap: 10px; flex-wrap: wrap; }
+        button {
+            background: #4da6ff;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        button:hover { background: #3d8bd9; }
+        button:disabled { background: #555; cursor: not-allowed; }
+        .move-history {
+            background: rgba(0,0,0,0.3);
+            border-radius: 5px;
+            padding: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
+        .thinking { color: #ffd700; }
+        .error { color: #ff6b6b; }
+        .win { color: #4ade80; }
+        .loss { color: #f87171; }
+        .draw { color: #fbbf24; }
+        select {
+            background: #2a2a4a;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 8px;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>♟️ Moonfish Chess</h1>
+        <p class="subtitle">Play against the <a href="https://github.com/luccabb/moonfish" target="_blank" rel="noopener">Moonfish</a> chess engine</p>
+        
+        <div id="board-container">
+            <div id="board"></div>
+        </div>
+        
+        <div class="info-panel">
+            <div class="status" id="status">Loading...</div>
+            <div class="controls">
+                <button id="newGame">New Game</button>
+                <select id="playerColor">
+                    <option value="white">Play as White</option>
+                    <option value="black">Play as Black</option>
+                </select>
+                <select id="difficulty">
+                    <option value="1">Easy</option>
+                    <option value="2" selected>Medium</option>
+                    <option value="3">Hard</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="info-panel">
+            <strong>Move History:</strong>
+            <div class="move-history" id="moveHistory">-</div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script>
+        const API_BASE = window.location.origin;
+        let board = null;
+        let game = new Chess();
+        let playerColor = 'white';
+        let isThinking = false;
+
+        function updateStatus(msg, className = '') {
+            const el = document.getElementById('status');
+            el.textContent = msg;
+            el.className = 'status ' + className;
+        }
+
+        function updateMoveHistory() {
+            const moves = game.history();
+            let html = '';
+            for (let i = 0; i < moves.length; i += 2) {
+                const moveNum = Math.floor(i / 2) + 1;
+                html += moveNum + '. ' + moves[i];
+                if (moves[i + 1]) html += ' ' + moves[i + 1];
+                html += '  ';
+            }
+            document.getElementById('moveHistory').textContent = html || '-';
+        }
+
+        function onDragStart(source, piece) {
+            if (game.game_over()) return false;
+            if (isThinking) return false;
+            if ((playerColor === 'white' && piece.search(/^b/) !== -1) ||
+                (playerColor === 'black' && piece.search(/^w/) !== -1)) {
+                return false;
+            }
+            if ((game.turn() === 'w' && playerColor !== 'white') ||
+                (game.turn() === 'b' && playerColor !== 'black')) {
+                return false;
+            }
+            return true;
+        }
+
+        async function makeEngineMove() {
+            if (game.game_over()) return;
+            
+            isThinking = true;
+            updateStatus('Moonfish is thinking...', 'thinking');
+            
+            try {
+                // Get legal moves for engine
+                const moves = game.moves({ verbose: true });
+                if (moves.length === 0) return;
+                
+                // Call our API to get the best move
+                const fen = game.fen();
+                const response = await fetch(API_BASE + '/engine-move', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        fen: fen,
+                        depth: parseInt(document.getElementById('difficulty').value)
+                    })
+                });
+                
+                if (!response.ok) throw new Error('Engine error');
+                
+                const data = await response.json();
+                const move = game.move({
+                    from: data.move.substring(0, 2),
+                    to: data.move.substring(2, 4),
+                    promotion: data.move.length > 4 ? data.move[4] : undefined
+                });
+                
+                if (move) {
+                    board.position(game.fen());
+                    updateMoveHistory();
+                }
+            } catch (err) {
+                console.error('Engine error:', err);
+                // Fallback: make a random legal move
+                const moves = game.moves({ verbose: true });
+                if (moves.length > 0) {
+                    const randomMove = moves[Math.floor(Math.random() * moves.length)];
+                    game.move(randomMove);
+                    board.position(game.fen());
+                    updateMoveHistory();
+                }
+            }
+            
+            isThinking = false;
+            checkGameOver();
+        }
+
+        function checkGameOver() {
+            if (game.in_checkmate()) {
+                const winner = game.turn() === 'w' ? 'Black' : 'White';
+                const isPlayerWin = (winner.toLowerCase() === playerColor);
+                updateStatus(winner + ' wins by checkmate!', isPlayerWin ? 'win' : 'loss');
+            } else if (game.in_stalemate()) {
+                updateStatus('Draw by stalemate', 'draw');
+            } else if (game.in_threefold_repetition()) {
+                updateStatus('Draw by repetition', 'draw');
+            } else if (game.insufficient_material()) {
+                updateStatus('Draw - insufficient material', 'draw');
+            } else if (game.in_draw()) {
+                updateStatus('Draw', 'draw');
+            } else if (game.in_check()) {
+                updateStatus(game.turn() === 'w' ? 'White is in check' : 'Black is in check');
+            } else {
+                updateStatus(game.turn() === 'w' ? 'White to move' : 'Black to move');
+            }
+        }
+
+        function onDrop(source, target) {
+            const move = game.move({
+                from: source,
+                to: target,
+                promotion: 'q'
+            });
+
+            if (move === null) return 'snapback';
+            
+            updateMoveHistory();
+            checkGameOver();
+            
+            if (!game.game_over()) {
+                setTimeout(makeEngineMove, 250);
+            }
+        }
+
+        function onSnapEnd() {
+            board.position(game.fen());
+        }
+
+        async function newGame() {
+            playerColor = document.getElementById('playerColor').value;
+            game.reset();
+            board.start();
+            board.orientation(playerColor);
+            updateMoveHistory();
+            updateStatus(playerColor === 'white' ? 'Your turn (White)' : 'Moonfish is thinking...', 
+                        playerColor === 'black' ? 'thinking' : '');
+            
+            if (playerColor === 'black') {
+                setTimeout(makeEngineMove, 500);
+            }
+        }
+
+        // Initialize
+        const config = {
+            draggable: true,
+            position: 'start',
+            onDragStart: onDragStart,
+            onDrop: onDrop,
+            onSnapEnd: onSnapEnd,
+            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+        };
+        
+        board = Chessboard('board', config);
+        $(window).resize(() => board.resize());
+        
+        document.getElementById('newGame').addEventListener('click', newGame);
+        document.getElementById('playerColor').addEventListener('change', newGame);
+        
+        updateStatus('White to move - drag a piece to play!');
+    </script>
+</body>
+</html>
