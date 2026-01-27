@@ -1,7 +1,8 @@
 # flake8: noqa
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import chess
+import chess.polyglot
 import chess.syzygy
 
 from moonfish.config import Config
@@ -259,18 +260,34 @@ def get_phase(board: chess.Board) -> float:
     return phase
 
 
-BOARD_EVALUATION_CACHE = {}
+BOARD_EVALUATION_CACHE: Dict[int, float] = {}
+BOARD_EVALUATION_CACHE_MAX_SIZE = 1_000_000  # Prevent unbounded memory growth
 
 
 def board_evaluation_cache(fun):
 
     def inner(board: chess.Board):
-        key = board.fen()
+        # Use zobrist hash (fast integer) instead of FEN (slow string)
+        key = chess.polyglot.zobrist_hash(board)
         if key not in BOARD_EVALUATION_CACHE:
+            # Clear cache if it gets too large (simple eviction policy)
+            if len(BOARD_EVALUATION_CACHE) >= BOARD_EVALUATION_CACHE_MAX_SIZE:
+                BOARD_EVALUATION_CACHE.clear()
             BOARD_EVALUATION_CACHE[key] = fun(board)
         return BOARD_EVALUATION_CACHE[key]
 
     return inner
+
+
+# All piece types to iterate over
+PIECE_TYPES = [
+    chess.PAWN,
+    chess.KNIGHT,
+    chess.BISHOP,
+    chess.ROOK,
+    chess.QUEEN,
+    chess.KING,
+]
 
 
 @board_evaluation_cache
@@ -290,41 +307,37 @@ def board_evaluation(board: chess.Board) -> float:
 
     phase = get_phase(board)
 
-    mg = {
-        chess.WHITE: 0,
-        chess.BLACK: 0,
-    }
-    eg = {
-        chess.WHITE: 0,
-        chess.BLACK: 0,
-    }
+    mg_white = 0
+    mg_black = 0
+    eg_white = 0
+    eg_black = 0
 
-    # loop through all squares and sum their piece values for both sides
-    for square in range(64):
-        piece = board.piece_at(square)
-        if piece is None:
-            continue
+    # Iterate only over actual pieces (typically 16-32) instead of all 64 squares
+    for piece_type in PIECE_TYPES:
+        mg_value = MG_PIECE_VALUES[piece_type]
+        eg_value = EG_PIECE_VALUES[piece_type]
+        mg_table = MG_PESTO[piece_type]
+        eg_table = EG_PESTO[piece_type]
 
-        if piece.color == chess.WHITE:
-            mg[piece.color] += (
-                MG_PESTO[piece.piece_type][square ^ 56]
-                + MG_PIECE_VALUES[piece.piece_type]
-            )
-            eg[piece.color] += (
-                EG_PESTO[piece.piece_type][square ^ 56]
-                + EG_PIECE_VALUES[piece.piece_type]
-            )
-        if piece.color == chess.BLACK:
-            mg[piece.color] += (
-                MG_PESTO[piece.piece_type][square] + MG_PIECE_VALUES[piece.piece_type]
-            )
-            eg[piece.color] += (
-                EG_PESTO[piece.piece_type][square] + EG_PIECE_VALUES[piece.piece_type]
-            )
+        # White pieces: flip square vertically (square ^ 56) for PST lookup
+        for square in board.pieces(piece_type, chess.WHITE):
+            flipped = square ^ 56
+            mg_white += mg_table[flipped] + mg_value
+            eg_white += eg_table[flipped] + eg_value
 
-    # calculate board score based on phase
-    mg_score = mg[board.turn] - mg[not board.turn]
-    eg_score = eg[board.turn] - eg[not board.turn]
+        # Black pieces: use square directly for PST lookup
+        for square in board.pieces(piece_type, chess.BLACK):
+            mg_black += mg_table[square] + mg_value
+            eg_black += eg_table[square] + eg_value
+
+    # calculate board score based on phase (from perspective of side to move)
+    if board.turn == chess.WHITE:
+        mg_score = mg_white - mg_black
+        eg_score = eg_white - eg_black
+    else:
+        mg_score = mg_black - mg_white
+        eg_score = eg_black - eg_white
+
     eval = ((mg_score * (256 - phase)) + (eg_score * phase)) / 256
 
     return eval

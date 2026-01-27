@@ -1,7 +1,9 @@
 from copy import copy
+from enum import IntEnum
 from multiprocessing.managers import DictProxy
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Union
 
+import chess.polyglot
 import chess.syzygy
 from chess import Board, Move
 from moonfish.config import Config
@@ -9,9 +11,20 @@ from moonfish.engines.random import choice
 from moonfish.move_ordering import organize_moves, organize_moves_quiescence
 from moonfish.psqt import board_evaluation, count_pieces
 
-CACHE_KEY = Dict[
-    Tuple[str, int, bool, float, float], Tuple[float | int, Optional[Move]]
-]
+
+class Bound(IntEnum):
+    """Transposition table bound types."""
+
+    EXACT = 0  # Score is exact (PV node, score was within alpha-beta window)
+    LOWER_BOUND = 1  # Score is at least this value (failed high / beta cutoff)
+    UPPER_BOUND = 2  # Score is at most this value (failed low)
+
+
+# Depth value for terminal positions (checkmate/stalemate) - always usable
+DEPTH_MAX = 10000
+
+# Cache: zobrist_hash -> (score, best_move, bound_type, depth)
+CACHE_TYPE = Dict[int, Tuple[Union[float, int], Optional[Move], Bound, int]]
 
 
 class AlphaBeta:
@@ -91,38 +104,68 @@ class AlphaBeta:
         Returns:
             - best_score: returns best move's score.
         """
-        if board.is_stalemate():
-            return 0
+        in_check = board.is_check()
 
         if board.is_checkmate():
             return -self.config.checkmate_score
 
+        if board.is_stalemate():
+            return 0
+
+        # Draw detection: fifty-move rule, insufficient material
+        # Note: Repetition is checked after making moves, not here
+        if board.is_fifty_moves() or board.is_insufficient_material():
+            return 0
+
         stand_pat = self.eval_board(board)
 
-        # recursion base case
-        if depth == 0:
-            return stand_pat
+        # When in check, we can't use stand-pat for pruning (position is unstable)
+        # We must search all evasions. However, still respect depth limit.
+        if in_check:
+            # In check: search all evasions, but don't use stand-pat for cutoffs
+            if depth <= 0:
+                # At depth limit while in check: return evaluation
+                # (not ideal but prevents infinite recursion)
+                return stand_pat
 
-        # beta-cutoff
-        if stand_pat >= beta:
-            return beta
+            best_score = float("-inf")
+            moves = list(board.legal_moves)  # All evasions
+        else:
+            # Not in check: normal quiescence behavior
+            # recursion base case
+            if depth <= 0:
+                return stand_pat
 
-        # alpha update
-        alpha = max(alpha, stand_pat)
+            # beta-cutoff: position is already good enough
+            if stand_pat >= beta:
+                return beta
 
-        # get moves for quiescence search
-        moves = organize_moves_quiescence(board)
+            # Use stand-pat as baseline (we can always choose not to capture)
+            best_score = stand_pat
+            alpha = max(alpha, stand_pat)
+
+            # Only tactical moves when not in check
+            moves = organize_moves_quiescence(board)
 
         for move in moves:
             # make move and get score
             board.push(move)
-            score = -self.quiescence_search(
-                board=board,
-                depth=depth - 1,
-                alpha=-beta,
-                beta=-alpha,
-            )
+
+            # Check if this move leads to a repetition (draw)
+            if board.is_repetition(2):
+                score: float = 0  # Draw score
+            else:
+                score = -self.quiescence_search(
+                    board=board,
+                    depth=depth - 1,
+                    alpha=-beta,
+                    beta=-alpha,
+                )
+
             board.pop()
+
+            if score > best_score:
+                best_score = score
 
             # beta-cutoff
             if score >= beta:
@@ -131,16 +174,18 @@ class AlphaBeta:
             # alpha-update
             alpha = max(alpha, score)
 
-        return alpha
+        return best_score
 
     def negamax(
         self,
         board: Board,
         depth: int,
         null_move: bool,
-        cache: DictProxy | CACHE_KEY,
+        cache: DictProxy | CACHE_TYPE,
         alpha: float = float("-inf"),
         beta: float = float("inf"),
+        ply: int = 0,
+        killers: Optional[list] = None,
     ) -> Tuple[float | int, Optional[Move]]:
         """
         This functions receives a board, depth and a player; and it returns
@@ -171,17 +216,36 @@ class AlphaBeta:
         Returns:
             - best_score, best_move: returns best move that it found and its value.
         """
-        cache_key = (board.fen(), depth, null_move, alpha, beta)
-        # check if board was already evaluated
+        original_alpha = alpha
+        cache_key = chess.polyglot.zobrist_hash(board)
+
+        # Check transposition table
         if cache_key in cache:
-            return cache[cache_key]
+            cached_score, cached_move, cached_bound, cached_depth = cache[cache_key]
+
+            # Only use score if cached search was at least as deep as we need
+            # Use cached result if:
+            # - EXACT: score is exact
+            # - LOWER_BOUND and score >= beta: true score is at least cached, causes cutoff
+            # - UPPER_BOUND and score <= alpha: true score is at most cached, no improvement
+            if cached_depth >= depth and (
+                cached_bound == Bound.EXACT
+                or (cached_bound == Bound.LOWER_BOUND and cached_score >= beta)
+                or (cached_bound == Bound.UPPER_BOUND and cached_score <= alpha)
+            ):
+                return cached_score, cached_move
 
         if board.is_checkmate():
-            cache[cache_key] = (-self.config.checkmate_score, None)
+            cache[cache_key] = (
+                -self.config.checkmate_score,
+                None,
+                Bound.EXACT,
+                DEPTH_MAX,
+            )
             return (-self.config.checkmate_score, None)
 
         if board.is_stalemate():
-            cache[cache_key] = (0, None)
+            cache[cache_key] = (0, None, Bound.EXACT, DEPTH_MAX)
             return (0, None)
 
         # recursion base case
@@ -193,12 +257,13 @@ class AlphaBeta:
                 alpha=alpha,
                 beta=beta,
             )
-            cache[cache_key] = (board_score, None)
+            cache[cache_key] = (board_score, None, Bound.EXACT, depth)
             return board_score, None
 
-        # null move prunning
+        # null move pruning
         if (
             self.config.null_move
+            and null_move
             and depth >= (self.config.null_move_r + 1)
             and not board.is_check()
         ):
@@ -212,19 +277,23 @@ class AlphaBeta:
                     cache=cache,
                     alpha=-beta,
                     beta=-beta + 1,
+                    ply=ply + 1,
+                    killers=killers,
                 )[0]
                 board.pop()
                 if board_score >= beta:
-                    cache[cache_key] = (beta, None)
+                    # Null move confirmed beta cutoff - this is a lower bound
+                    cache[cache_key] = (beta, None, Bound.LOWER_BOUND, depth)
                     return beta, None
 
         best_move = None
-
-        # initializing best_score
         best_score = float("-inf")
-        moves = organize_moves(board)
+        ply_killers = killers[ply] if killers and ply < len(killers) else None
+        moves = organize_moves(board, ply_killers)
 
         for move in moves:
+            is_capture = board.is_capture(move)
+
             # make the move
             board.push(move)
 
@@ -235,6 +304,8 @@ class AlphaBeta:
                 cache=cache,
                 alpha=-beta,
                 beta=-alpha,
+                ply=ply + 1,
+                killers=killers,
             )[0]
             if board_score > self.config.checkmate_threshold:
                 board_score -= 1
@@ -244,39 +315,64 @@ class AlphaBeta:
             # take move back
             board.pop()
 
-            # beta-cutoff
-            if board_score >= beta:
-                cache[cache_key] = (board_score, move)
-                return board_score, move
-
             # update best move
             if board_score > best_score:
                 best_score = board_score
                 best_move = move
 
-            # setting alpha variable to do pruning
-            alpha = max(alpha, board_score)
+            # beta-cutoff: opponent won't allow this position
+            if best_score >= beta:
+                # Update killer moves for quiet moves that cause beta cutoff
+                # Add to killers if not already there (keep 2 killers per ply)
+                if (
+                    killers
+                    and not is_capture
+                    and ply < len(killers)
+                    and move not in killers[ply]
+                ):
+                    killers[ply].insert(0, move)
+                    if len(killers[ply]) > 2:
+                        killers[ply].pop()
 
-            # alpha beta pruning when we already found a solution that is at least as
-            # good as the current one those branches won't be able to influence the
-            # final decision so we don't need to waste time analyzing them
-            if alpha >= beta:
-                break
+                # LOWER_BOUND: true score is at least best_score
+                cache[cache_key] = (best_score, best_move, Bound.LOWER_BOUND, depth)
+                return best_score, best_move
+
+            # update alpha
+            alpha = max(alpha, best_score)
 
         # if no best move, make a random one
         if not best_move:
             best_move = self.random_move(board)
 
-        # save result before returning
-        cache[cache_key] = (best_score, best_move)
+        # Determine bound type based on whether we improved alpha
+        if best_score <= original_alpha:
+            # Failed low: we didn't find anything better than what we already had
+            bound = Bound.UPPER_BOUND
+        else:
+            # Score is exact: we found a score within the window
+            bound = Bound.EXACT
+
+        cache[cache_key] = (best_score, best_move, bound, depth)
         return best_score, best_move
 
     def search_move(self, board: Board) -> Move:
         # create shared cache
-        cache: CACHE_KEY = {}
+        cache: CACHE_TYPE = {}
+
+        # Killer moves table: 2 killers per ply
+        # Max ply is roughly target_depth + quiescence_depth + some buffer
+        max_ply = self.config.negamax_depth + self.config.quiescence_search_depth + 10
+        killers: list = [[] for _ in range(max_ply)]
 
         best_move = self.negamax(
-            board, copy(self.config.negamax_depth), self.config.null_move, cache
+            board,
+            copy(self.config.negamax_depth),
+            self.config.null_move,
+            cache,
+            ply=0,
+            killers=killers,
         )[1]
         assert best_move is not None, "Best move from root should not be None"
         return best_move
+# Trigger
