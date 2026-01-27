@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         chunk: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # 10 parallel jobs, 10 rounds each = 100 total per skill level
-        skill_level: [4, 5]  # Test against both skill levels
+        skill_level: [3, 4, 5]  # Test against multiple skill levels
     env:
       UV_SYSTEM_PYTHON: 1
 
@@ -193,7 +193,7 @@ jobs:
   aggregate:
     runs-on: ubuntu-latest
     needs: benchmark
-    if: always()
+    if: ${{ !cancelled() && contains(join(needs.benchmark.result, ','), 'success') }}
     steps:
     - uses: actions/checkout@v4
 
@@ -205,7 +205,7 @@ jobs:
 
     - name: Merge all PGN files
       run: |
-        for SKILL in 4 5; do
+        for SKILL in 3 4 5; do
           cat benchmark-skill$SKILL-chunk*.pgn > benchmark-skill$SKILL-all.pgn 2>/dev/null || echo "No PGN files for skill $SKILL"
         done
 
@@ -218,7 +218,7 @@ jobs:
           echo "## 🔬 Stockfish Benchmark Results"
           echo ""
 
-          for SKILL in 4 5; do
+          for SKILL in 3 4 5; do
             # Initialize counters
             TOTAL_WINS=0 TOTAL_LOSSES=0 TOTAL_DRAWS=0
             TOTAL_WHITE_WINS=0 TOTAL_WHITE_LOSSES=0 TOTAL_WHITE_DRAWS=0
@@ -278,7 +278,7 @@ jobs:
 
           echo "<details><summary>Configuration</summary>"
           echo ""
-          echo "- 10 chunks × 10 rounds × 2 skill levels = 200 total games"
+          echo "- 10 chunks × 10 rounds × 3 skill levels = 300 total games"
           echo "- Each opening played with colors reversed (-repeat) for fairness"
           echo "- Moonfish: 60s per move"
           echo "- Stockfish: 60+5 time control"
