@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        chunk: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # 10 parallel jobs, 10 rounds each = 100 total per skill level
+        chunk: [0, 1, 2, 3, 4]  # 5 parallel jobs, 20 rounds each = 100 total per skill level
         skill_level: [3, 4, 5]  # Test against multiple skill levels
     env:
       UV_SYSTEM_PYTHON: 1
@@ -278,7 +278,7 @@ jobs:
 
           echo "<details><summary>Configuration</summary>"
           echo ""
-          echo "- 10 chunks × 20 rounds × 3 skill levels = 600 total games"
+          echo "- 5 chunks × 20 rounds × 3 skill levels = 300 total games"
           echo "- Each opening played with colors reversed (-repeat) for fairness"
           echo "- Moonfish: 60s per move"
           echo "- Stockfish: 60+5 time control"
