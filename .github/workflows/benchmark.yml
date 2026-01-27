@@ -30,8 +30,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        chunk: [0, 1, 2, 3, 4]  # 5 parallel jobs, 40 rounds each = 200 total per skill level
-        skill_level: [1, 3, 4, 5]  # Test against multiple skill levels
+        chunk: [0, 1, 2, 3, 4]  # 5 parallel jobs, 20 rounds each = 100 total per skill level
+        skill_level: [3, 4, 5]  # Test against multiple skill levels
     env:
       UV_SYSTEM_PYTHON: 1
 
@@ -129,7 +129,7 @@ jobs:
       run: |
         CHUNK=${{ matrix.chunk }}
         SKILL=${{ matrix.skill_level }}
-        ROUNDS_PER_CHUNK=40
+        ROUNDS_PER_CHUNK=20
         SEED=$((CHUNK * 1000 + SKILL * 100 + 42))  # Different seed per chunk/skill for opening variety
 
         echo "Running moonfish vs Stockfish benchmark (chunk $CHUNK, skill $SKILL)..."
@@ -217,7 +217,7 @@ jobs:
 
     - name: Merge all PGN files
       run: |
-        for SKILL in 1 3 4 5; do
+        for SKILL in 3 4 5; do
           cat benchmark-skill$SKILL-chunk*.pgn > benchmark-skill$SKILL-all.pgn 2>/dev/null || echo "No PGN files for skill $SKILL"
         done
 
@@ -230,7 +230,7 @@ jobs:
           echo "## 🔬 Stockfish Benchmark Results"
           echo ""
 
-          for SKILL in 1 3 4 5; do
+          for SKILL in 3 4 5; do
             # Initialize counters
             TOTAL_WINS=0 TOTAL_LOSSES=0 TOTAL_DRAWS=0
             TOTAL_WHITE_WINS=0 TOTAL_WHITE_LOSSES=0 TOTAL_WHITE_DRAWS=0
@@ -290,7 +290,7 @@ jobs:
 
           echo "<details><summary>Configuration</summary>"
           echo ""
-          echo "- 5 chunks × 40 rounds × 4 skill levels = 800 total games (200 per skill level)"
+          echo "- 5 chunks × 20 rounds × 3 skill levels = 300 total games"
           echo "- Each opening played with colors reversed (-repeat) for fairness"
           echo "- Moonfish: 60s per move"
           echo "- Stockfish: 60+5 time control"
