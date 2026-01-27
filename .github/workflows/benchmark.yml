@@ -6,7 +6,6 @@ on:
     paths:
       # Only run benchmarks when engine code changes
       - 'moonfish/**'
-      - 'lichess/**'
       - 'opening_book/**'
       - 'pyproject.toml'
       - 'requirements.txt'
