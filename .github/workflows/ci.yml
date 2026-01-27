@@ -4,6 +4,9 @@ on:
   pull_request:
     branches: [ master ]
 
+env:
+  GIT_LFS_SKIP_SMUDGE: 1
+
 jobs:
   test:
     runs-on: ${{ matrix.os }}
@@ -16,6 +19,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        lfs: false
 
     - name: Install uv
       uses: astral-sh/setup-uv@v5
@@ -55,6 +60,8 @@ jobs:
       UV_SYSTEM_PYTHON: 1
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: false
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -81,6 +88,8 @@ jobs:
       UV_SYSTEM_PYTHON: 1
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: false
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -107,6 +116,8 @@ jobs:
       UV_SYSTEM_PYTHON: 1
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: false
       
       - name: Install uv
         uses: astral-sh/setup-uv@v5
