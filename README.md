@@ -8,6 +8,10 @@ Moonfish is a didactic Python chess engine designed to showcase parallel search 
 
 The engine achieves approximately ~2000 Elo when playing against Lichess Stockfish bots (beats level 5 and loses to level 6) and includes comprehensive test suites including the Bratko-Kopec tactical test positions.
 
+## Play Online
+
+**[Play against Moonfish in your browser](https://huggingface.co/spaces/luccabb/moonfish_chess)** - No installation required!
+
 # Quickstart
 
 ## Requirements
@@ -79,6 +83,7 @@ $ curl "http://localhost:5000/?fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR%2
 - **UCI Protocol** - Compatible with popular chess GUIs
 - **Web API** - RESTful interface for online integration
 - **Lichess Bot** - Ready for deployment on [Lichess.org](/CONTRIBUTING.md#lichess-bot-python-bridge)
+- **RL Environment** - OpenEnv-compatible environment for reinforcement learning
 
 ## Configuration Options
 
@@ -91,6 +96,114 @@ $ curl "http://localhost:5000/?fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR%2
 | `--null-mov-r` | Null move reduction factor | `2` | `1-N` |
 | `--quiescence-search-depth` | Max depth of quiescence search | `3` | `1-N` |
 | `--syzygy-path` | Tablebase directory | `None` | Valid path |
+
+## Reinforcement Learning Environment
+
+Moonfish includes an [OpenEnv](https://github.com/huggingface/openenv)-compatible RL environment for training chess agents. OpenEnv is a framework for RL environments that supports both local and remote (HTTP) execution.
+
+### Installation
+
+```shell
+pip install moonfish[rl]
+```
+
+### Local Usage
+
+```python
+from moonfish.rl import ChessEnvironment, ChessAction
+
+# Create environment with moonfish as opponent
+env = ChessEnvironment(opponent="moonfish", opponent_depth=2)
+
+# Reset and play
+obs = env.reset()
+while not obs.done:
+    move = select_move(obs.legal_moves)  # Your policy here
+    obs, reward, done = env.step(ChessAction(move=move))
+
+env.close()
+```
+
+### Configuration Options
+
+```python
+from moonfish.rl import ChessEnvironment, RewardConfig
+
+# Custom reward shaping
+config = RewardConfig(
+    win=1.0,              # Reward for winning
+    loss=-1.0,            # Penalty for losing
+    draw=0.0,             # Reward for draw
+    illegal_move=-0.1,    # Penalty for illegal moves
+    use_evaluation=True,  # Enable position-based intermediate rewards
+    evaluation_scale=0.001,
+)
+
+# Environment options
+env = ChessEnvironment(
+    reward_config=config,
+    opponent="moonfish",   # "moonfish", "random", or None (self-play)
+    opponent_depth=2,      # Search depth for moonfish opponent
+    agent_color=True,      # True=White, False=Black, None=alternate
+    max_moves=500,         # Max half-moves before draw
+)
+```
+
+### OpenEnv Server Mode
+
+For distributed training or integration with OpenEnv-compatible frameworks:
+
+```shell
+# Start the server locally
+python -m uvicorn moonfish.rl.server.app:app --port 8000
+```
+
+```python
+# Connect via HTTP client
+from moonfish.rl import make_env, ChessAction
+
+client = make_env("http://localhost:8000")
+obs = client.reset()
+result = client.step(ChessAction(move="e2e4"))
+print(result.observation.fen)
+```
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/metadata` | GET | Environment configuration |
+| `/reset` | POST | Start new game (optional: `fen`, `seed`) |
+| `/step` | POST | Make a move (`{"move": "e2e4"}`) |
+| `/state` | GET | Current game state |
+| `/engine-move` | POST | Get best move for position |
+
+### Hosted on Hugging Face
+
+A hosted version is available on Hugging Face Spaces - use it for training without running your own server:
+
+```python
+from moonfish.rl import make_env, ChessAction
+
+client = make_env("https://luccabb-moonfish-chess.hf.space")
+obs = client.reset()
+result = client.step(ChessAction(move="e2e4"))
+```
+
+**Space URL:** https://huggingface.co/spaces/luccabb/moonfish_chess
+
+### Deploy Your Own
+
+```shell
+# Install OpenEnv CLI
+pip install openenv
+
+# Clone and deploy to Hugging Face Spaces
+cd moonfish/rl
+openenv validate  # Check environment structure
+openenv push      # Deploy to HF Spaces
+```
 
 ## Contributing
 

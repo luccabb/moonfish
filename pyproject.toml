@@ -30,8 +30,16 @@ dependencies = [
 [project.scripts]
 moonfish = "moonfish.main:main"
 
+[project.optional-dependencies]
+rl = [
+  "fastapi>=0.100.0",
+  "uvicorn[standard]>=0.23.0",
+  "httpx>=0.24.0",
+  "pydantic>=2.0.0",
+]
+
 [tool.setuptools]
-packages = ["moonfish"]
+packages = ["moonfish", "moonfish.rl", "moonfish.rl.server", "moonfish.rl.examples"]
 
 [tool.setuptools_scm]
 version_scheme = "post-release"
@@ -41,7 +49,17 @@ local_scheme = "no-local-version"
 "moonfish" = ["py.typed"]
 
 [[tool.mypy.overrides]]
-module = ["parameterized.*"]   # include sub‑modules, just in case
+module = [
+    "parameterized.*",
+    "httpx",
+    "httpx.*",
+    "fastapi",
+    "fastapi.*",
+    "pydantic",
+    "pydantic.*",
+    "uvicorn",
+    "uvicorn.*",
+]
 ignore_missing_imports = true
 
 [project.urls]
