@@ -117,7 +117,7 @@ jobs:
       run: |
         CHUNK=${{ matrix.chunk }}
         SKILL=${{ matrix.skill_level }}
-        ROUNDS_PER_CHUNK=10
+        ROUNDS_PER_CHUNK=20
         SEED=$((CHUNK * 1000 + SKILL * 100 + 42))  # Different seed per chunk/skill for opening variety
 
         echo "Running moonfish vs Stockfish benchmark (chunk $CHUNK, skill $SKILL)..."
@@ -131,7 +131,7 @@ jobs:
           -engine name=stockfish cmd=stockfish proto=uci option.Skill\ Level=$SKILL option.Threads=1 tc=60+5 timemargin=10000 \
           -rounds $ROUNDS_PER_CHUNK \
           -repeat \
-          -concurrency 10 \
+          -concurrency 20 \
           -pgnout benchmark-skill$SKILL-chunk$CHUNK.pgn \
           -srand $SEED \
           -recover \
@@ -278,7 +278,7 @@ jobs:
 
           echo "<details><summary>Configuration</summary>"
           echo ""
-          echo "- 10 chunks × 10 rounds × 3 skill levels = 300 total games"
+          echo "- 10 chunks × 20 rounds × 3 skill levels = 600 total games"
           echo "- Each opening played with colors reversed (-repeat) for fairness"
           echo "- Moonfish: 60s per move"
           echo "- Stockfish: 60+5 time control"
