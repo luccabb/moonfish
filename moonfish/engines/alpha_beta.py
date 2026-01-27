@@ -218,10 +218,14 @@ class AlphaBeta:
         """
         original_alpha = alpha
         cache_key = chess.polyglot.zobrist_hash(board)
+        tt_move = None  # Best move from transposition table (for move ordering)
 
         # Check transposition table
         if cache_key in cache:
             cached_score, cached_move, cached_bound, cached_depth = cache[cache_key]
+
+            # Save TT move for ordering even if we can't use the score
+            tt_move = cached_move
 
             # Only use score if cached search was at least as deep as we need
             # Use cached result if:
@@ -291,6 +295,11 @@ class AlphaBeta:
         ply_killers = killers[ply] if killers and ply < len(killers) else None
         moves = organize_moves(board, ply_killers)
 
+        # Put TT move first if available (best move from previous search)
+        if tt_move is not None and tt_move in moves:
+            moves.remove(tt_move)
+            moves.insert(0, tt_move)
+
         for move in moves:
             is_capture = board.is_capture(move)
 
@@ -357,21 +366,86 @@ class AlphaBeta:
         return best_score, best_move
 
     def search_move(self, board: Board) -> Move:
-        # create shared cache
-        cache: CACHE_TYPE = {}
+        """
+        Search for the best move using iterative deepening with aspiration windows.
 
-        # Killer moves table: 2 killers per ply
+        Iterative deepening searches depth 1, then 2, then 3, etc.
+        This improves move ordering (TT move from depth N-1 is tried first at depth N)
+        and allows for future time management (can stop early if time runs out).
+
+        Aspiration windows: after depth 1, use a narrow window around the previous
+        score. If the search fails outside the window, re-search with a wider window.
+        """
+        # Create shared cache - persists across all depths
+        cache: CACHE_TYPE = {}
+        best_move = None
+        target_depth = self.config.negamax_depth
+        prev_score = None
+
+        # Killer moves table: 2 killers per ply, persists across iterations
         # Max ply is roughly target_depth + quiescence_depth + some buffer
-        max_ply = self.config.negamax_depth + self.config.quiescence_search_depth + 10
+        max_ply = target_depth + self.config.quiescence_search_depth + 10
         killers: list = [[] for _ in range(max_ply)]
 
-        best_move = self.negamax(
-            board,
-            copy(self.config.negamax_depth),
-            self.config.null_move,
-            cache,
-            ply=0,
-            killers=killers,
-        )[1]
+        # Aspiration window parameters
+        INITIAL_WINDOW = 50  # Initial window size (centipawns)
+
+        # Iterative deepening: search depth 1, 2, 3, ... up to target
+        for depth in range(1, target_depth + 1):
+            # Use aspiration windows after first iteration
+            if prev_score is None or depth <= 1:
+                # First iteration: full window
+                alpha = float("-inf")
+                beta = float("inf")
+            else:
+                # Subsequent iterations: narrow window around previous score
+                alpha = prev_score - INITIAL_WINDOW
+                beta = prev_score + INITIAL_WINDOW
+
+            # Aspiration window loop: widen window on fail high/low
+            window = INITIAL_WINDOW
+            while True:
+                score, move = self.negamax(
+                    board,
+                    depth,
+                    self.config.null_move,
+                    cache,
+                    alpha=alpha,
+                    beta=beta,
+                    ply=0,
+                    killers=killers,
+                )
+
+                # Check if we need to re-search with wider window
+                if score <= alpha:
+                    # Failed low: widen window on the low side
+                    window *= 2
+                    # prev_score is guaranteed non-None after depth 1
+                    assert prev_score is not None
+                    alpha = prev_score - window
+                    if window > 500:  # Give up and use full window
+                        alpha = float("-inf")
+                elif score >= beta:
+                    # Failed high: widen window on the high side
+                    window *= 2
+                    # prev_score is guaranteed non-None after depth 1
+                    assert prev_score is not None
+                    beta = prev_score + window
+                    if window > 500:  # Give up and use full window
+                        beta = float("inf")
+                else:
+                    # Score is within window, we're done
+                    break
+
+                # Safety: if window is fully open, we must accept the result
+                if alpha == float("-inf") and beta == float("inf"):
+                    break
+
+            prev_score = score
+
+            # Update best move from completed search
+            if move is not None:
+                best_move = move
+
         assert best_move is not None, "Best move from root should not be None"
         return best_move
