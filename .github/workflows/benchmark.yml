@@ -2,7 +2,12 @@ name: Stockfish Benchmark
 
 on:
   pull_request:
-    branches: [ master ]
+    paths:
+      # Only run benchmarks when engine code changes
+      - 'moonfish/**'
+      - 'opening_book/**'
+      - 'pyproject.toml'
+      - 'requirements.txt'
 
 permissions:
   contents: read
