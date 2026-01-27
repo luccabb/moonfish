@@ -1,0 +1,6 @@
+spec_version: 1
+name: moonfish_chess
+type: space
+runtime: fastapi
+app: server.app:app
+port: 7860
