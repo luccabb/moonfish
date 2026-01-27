@@ -86,4 +86,3 @@ def find_best_move(board: Board, engine: ChessEngine) -> Move:
     except (ValueError, OSError, AttributeError, IndexError):
         best_move = engine.search_move(board)
     return best_move
-# Trigger benchmark 1769542464
