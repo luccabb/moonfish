@@ -7,8 +7,8 @@
 set -euo pipefail
 
 # Configuration
-ROUNDS=${ROUNDS:-200}  # 200 games per skill level
-CONCURRENCY=${CONCURRENCY:-4}
+ROUNDS=${ROUNDS:-100}  # 100 games per skill level
+CONCURRENCY=${CONCURRENCY:-15}
 SKILL_LEVELS=${SKILL_LEVELS:-"1 2 3 4 5"}
 MOONFISH_TIME=${MOONFISH_TIME:-60}  # seconds per move
 STOCKFISH_TC=${STOCKFISH_TC:-"60+5"}

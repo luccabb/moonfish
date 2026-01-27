@@ -308,11 +308,17 @@ jobs:
       run: |
         gh pr comment ${{ github.event.pull_request.number }} --body-file pr-comment.md
 
-    - name: Add thumbs up reaction to PR
+    - name: Update PR reaction (eyes -> thumbs up)
       if: github.event_name == 'pull_request'
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
+        # Remove eyes reaction
+        REACTIONS=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/reactions --jq '.[] | select(.content == "eyes") | .id' || true)
+        for ID in $REACTIONS; do
+          gh api -X DELETE repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/reactions/$ID --silent || true
+        done
+        # Add thumbs up
         gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/reactions \
           -f content='+1' --silent || true
 
