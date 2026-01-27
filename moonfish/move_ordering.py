@@ -125,3 +125,4 @@ def mvv_lva(board: Board, move: Move, phase: float) -> float:
         move_value += evaluate_capture(board, move, phase)
 
     return -move_value if board.turn else move_value
+
