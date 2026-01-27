@@ -2,7 +2,6 @@ name: Stockfish Benchmark
 
 on:
   pull_request:
-    branches: [ master ]
     paths:
       # Only run benchmarks when engine code changes
       - 'moonfish/**'
