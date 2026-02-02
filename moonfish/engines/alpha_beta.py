@@ -140,7 +140,7 @@ class AlphaBeta:
 
             # Check if this move leads to a repetition (draw)
             if board.is_repetition(2):
-                score: float = 0  # Draw score
+                score = 0  # Draw score
             else:
                 score = -self.quiescence_search(
                     board=board,
