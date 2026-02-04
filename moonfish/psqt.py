@@ -1,7 +1,6 @@
 # flake8: noqa
 
 import chess
-import chess.polyglot
 import chess.syzygy
 
 ############
@@ -247,25 +246,6 @@ def get_phase(board: chess.Board) -> float:
     return phase
 
 
-BOARD_EVALUATION_CACHE: Dict[int, float] = {}
-BOARD_EVALUATION_CACHE_MAX_SIZE = 1_000_000  # Prevent unbounded memory growth
-
-
-def board_evaluation_cache(fun):
-
-    def inner(board: chess.Board):
-        # Use zobrist hash (fast integer) instead of FEN (slow string)
-        key = chess.polyglot.zobrist_hash(board)
-        if key not in BOARD_EVALUATION_CACHE:
-            # Clear cache if it gets too large (simple eviction policy)
-            if len(BOARD_EVALUATION_CACHE) >= BOARD_EVALUATION_CACHE_MAX_SIZE:
-                BOARD_EVALUATION_CACHE.clear()
-            BOARD_EVALUATION_CACHE[key] = fun(board)
-        return BOARD_EVALUATION_CACHE[key]
-
-    return inner
-
-
 # All piece types to iterate over
 PIECE_TYPES = [
     chess.PAWN,
@@ -277,7 +257,6 @@ PIECE_TYPES = [
 ]
 
 
-@board_evaluation_cache
 def board_evaluation(board: chess.Board) -> float:
     """
     This functions receives a board and assigns a value to it, it acts as
