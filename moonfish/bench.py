@@ -7,6 +7,7 @@ from moonfish.config import Config
 from moonfish.engines.alpha_beta import AlphaBeta
 
 # 48 positions from Stockfish's bench command (excluding 2 Chess960 positions).
+# Source: https://github.com/official-stockfish/Stockfish/blob/master/src/benchmark.cpp
 # Some entries include "moves ..." suffixes that are applied before searching.
 BENCH_POSITIONS = [
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
