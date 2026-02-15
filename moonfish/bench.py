@@ -102,7 +102,9 @@ def run_bench(depth: int) -> None:
 
         # Skip terminal positions (checkmate/stalemate) — no moves to search
         if not list(board.legal_moves):
-            print(f"Position {i:>2}/{n}: nodes=0          time=0.00s  nps=0  (terminal)")
+            print(
+                f"Position {i:>2}/{n}: nodes=0          time=0.00s  nps=0  (terminal)"
+            )
             continue
 
         start = time.perf_counter()

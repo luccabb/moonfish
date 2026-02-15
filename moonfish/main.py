@@ -3,10 +3,10 @@ from typing import Optional
 
 import click
 
+from moonfish.bench import run_bench
 from moonfish.config import Config
 from moonfish.mode.api import main as api_main
 from moonfish.mode.uci import main as uci_main
-from moonfish.bench import run_bench
 
 
 def run(config: Config):
@@ -22,7 +22,10 @@ def run(config: Config):
 
 @click.command()
 @click.option(
-    "--mode", type=str, help="Mode to run the engine, one of [uci, api, bench].", default="uci"
+    "--mode",
+    type=str,
+    help="Mode to run the engine, one of [uci, api, bench].",
+    default="uci",
 )
 @click.option(
     "--algorithm",
