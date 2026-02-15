@@ -1,17 +1,20 @@
-from copy import copy
 from multiprocessing.managers import DictProxy
-from typing import Dict, Optional, Tuple
 
 import chess.syzygy
 from chess import Board, Move
+
 from moonfish.config import Config
 from moonfish.engines.random import choice
 from moonfish.move_ordering import organize_moves, organize_moves_quiescence
 from moonfish.psqt import board_evaluation, count_pieces
 
-CACHE_KEY = Dict[
-    Tuple[str, int, bool, float, float], Tuple[float | int, Optional[Move]]
+CACHE_KEY = dict[
+    tuple[object, int, bool, float, float], tuple[float | int, Move | None]
 ]
+
+INF = float("inf")
+NEG_INF = float("-inf")
+NULL_MOVE = Move.null()
 
 
 class AlphaBeta:
@@ -53,16 +56,16 @@ class AlphaBeta:
         Returns:
             - score: the score for the current board
         """
-        pieces = sum(count_pieces(board))
-
-        # Use pre-opened tablebase for endgame positions
-        if pieces <= self.config.syzygy_pieces and self.tablebase is not None:
-            try:
-                dtz = self.tablebase.probe_dtz(board)
-                return dtz
-            except (chess.syzygy.MissingTableError, KeyError):
-                # Position not in tablebase, fall through to normal evaluation
-                pass
+        # Short-circuit: only count pieces if a tablebase is loaded
+        if self.tablebase is not None:
+            pieces = sum(count_pieces(board))
+            if pieces <= self.config.syzygy_pieces:
+                try:
+                    dtz = self.tablebase.probe_dtz(board)
+                    return dtz
+                except (chess.syzygy.MissingTableError, KeyError):
+                    # Position not in tablebase, fall through to normal evaluation
+                    pass
 
         return board_evaluation(board)
 
@@ -118,7 +121,7 @@ class AlphaBeta:
                 # (not ideal but prevents infinite recursion)
                 return stand_pat
 
-            best_score = float("-inf")
+            best_score = NEG_INF
             moves = list(board.legal_moves)  # All evasions
         else:
             # Not in check: normal quiescence behavior
@@ -146,10 +149,10 @@ class AlphaBeta:
                 score = 0.0  # Draw score
             else:
                 score = -self.quiescence_search(
-                    board=board,
-                    depth=depth - 1,
-                    alpha=-beta,
-                    beta=-alpha,
+                    board,
+                    depth - 1,
+                    -beta,
+                    -alpha,
                 )
 
             board.pop()
@@ -172,9 +175,9 @@ class AlphaBeta:
         depth: int,
         null_move: bool,
         cache: DictProxy | CACHE_KEY,
-        alpha: float = float("-inf"),
-        beta: float = float("inf"),
-    ) -> Tuple[float | int, Optional[Move]]:
+        alpha: float = NEG_INF,
+        beta: float = INF,
+    ) -> tuple[float | int, Move | None]:
         """
         This functions receives a board, depth and a player; and it returns
         the best move for the current board based on how many depths we're looking ahead
@@ -204,7 +207,7 @@ class AlphaBeta:
         Returns:
             - best_score, best_move: returns best move that it found and its value.
         """
-        cache_key = (board.fen(), depth, null_move, alpha, beta)
+        cache_key = (board._transposition_key(), depth, null_move, alpha, beta)
 
         self.nodes += 1
 
@@ -224,10 +227,10 @@ class AlphaBeta:
         if depth <= 0:
             # evaluate current board
             board_score = self.quiescence_search(
-                board=board,
-                depth=copy(self.config.quiescence_search_depth),
-                alpha=alpha,
-                beta=beta,
+                board,
+                self.config.quiescence_search_depth,
+                alpha,
+                beta,
             )
             cache[cache_key] = (board_score, None)
             return board_score, None
@@ -240,14 +243,14 @@ class AlphaBeta:
         ):
             board_score = self.eval_board(board)
             if board_score >= beta:
-                board.push(Move.null())
+                board.push(NULL_MOVE)
                 board_score = -self.negamax(
-                    board=board,
-                    depth=depth - 1 - self.config.null_move_r,
-                    null_move=False,
-                    cache=cache,
-                    alpha=-beta,
-                    beta=-beta + 1,
+                    board,
+                    depth - 1 - self.config.null_move_r,
+                    False,
+                    cache,
+                    -beta,
+                    -beta + 1,
                 )[0]
                 board.pop()
                 if board_score >= beta:
@@ -257,7 +260,7 @@ class AlphaBeta:
         best_move = None
 
         # initializing best_score
-        best_score = float("-inf")
+        best_score = NEG_INF
         moves = organize_moves(board)
 
         for move in moves:
@@ -265,12 +268,12 @@ class AlphaBeta:
             board.push(move)
 
             board_score = -self.negamax(
-                board=board,
-                depth=depth - 1,
-                null_move=null_move,
-                cache=cache,
-                alpha=-beta,
-                beta=-alpha,
+                board,
+                depth - 1,
+                null_move,
+                cache,
+                -beta,
+                -alpha,
             )[0]
             if board_score > self.config.checkmate_threshold:
                 board_score -= 1
@@ -313,7 +316,7 @@ class AlphaBeta:
         cache: CACHE_KEY = {}
 
         best_move = self.negamax(
-            board, copy(self.config.negamax_depth), self.config.null_move, cache
+            board, self.config.negamax_depth, self.config.null_move, cache
         )[1]
         assert best_move is not None, "Best move from root should not be None"
         return best_move

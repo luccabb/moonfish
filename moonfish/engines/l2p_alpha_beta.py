@@ -1,11 +1,10 @@
 from collections import defaultdict
-from copy import copy
 from functools import partial
-from multiprocessing import cpu_count, Manager, Pool
+from multiprocessing import Manager, Pool, cpu_count
 from multiprocessing.managers import DictProxy
-from typing import List, Tuple
 
 from chess import Board, Move
+
 from moonfish.config import Config
 from moonfish.engines.alpha_beta import AlphaBeta
 
@@ -32,7 +31,7 @@ class Layer2ParallelAlphaBeta(AlphaBeta):
 
     def generate_board_and_moves(
         self, og_board: Board, board_to_move_that_generates_it: DictProxy, layer: int
-    ) -> List[Tuple[Board, Board, int]]:
+    ) -> list[tuple[Board, Board, int]]:
         """
         Generate all possible boards with their layer depth for each board.
 
@@ -48,7 +47,7 @@ class Layer2ParallelAlphaBeta(AlphaBeta):
                 - layer depth
         """
         boards_and_moves = []
-        board = copy(og_board)
+        board = og_board.copy()
 
         # if board has no legal moves, we leave it as is
         # we need to run this board through negamax to get its value
@@ -69,7 +68,7 @@ class Layer2ParallelAlphaBeta(AlphaBeta):
             else:
                 board_to_move_that_generates_it[board.fen()] = move
             # add new board, original board, and current layer to our output
-            boards_and_moves.append((copy(board), og_board, layer + 1))
+            boards_and_moves.append((board.copy(), og_board, layer + 1))
 
             board.pop()
 
@@ -101,7 +100,7 @@ class Layer2ParallelAlphaBeta(AlphaBeta):
         negamax_arguments = [
             (
                 board,
-                copy(self.config.negamax_depth) - START_LAYER,
+                self.config.negamax_depth - START_LAYER,
                 self.config.null_move,
                 shared_cache,
             )
