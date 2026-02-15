@@ -21,6 +21,7 @@ class AlphaBeta:
 
     def __init__(self, config: Config):
         self.config = config
+        self.nodes: int = 0
 
         # Open Syzygy tablebase once at initialization (not on every eval)
         self.tablebase = None
@@ -92,6 +93,8 @@ class AlphaBeta:
             - best_score: returns best move's score.
         """
         in_check = board.is_check()
+
+        self.nodes += 1
 
         if board.is_checkmate():
             return -self.config.checkmate_score
@@ -202,6 +205,9 @@ class AlphaBeta:
             - best_score, best_move: returns best move that it found and its value.
         """
         cache_key = (board.fen(), depth, null_move, alpha, beta)
+
+        self.nodes += 1
+
         # check if board was already evaluated
         if cache_key in cache:
             return cache[cache_key]
@@ -302,6 +308,7 @@ class AlphaBeta:
         return best_score, best_move
 
     def search_move(self, board: Board) -> Move:
+        self.nodes = 0
         # create shared cache
         cache: CACHE_KEY = {}
 
