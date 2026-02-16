@@ -2,15 +2,24 @@ import random
 
 from chess import BLACK, Board, Move
 
-from moonfish.psqt import evaluate_capture, evaluate_piece, get_phase
+from moonfish.psqt import (
+    MG_PIECE_VALUES,
+    evaluate_capture,
+    evaluate_piece,
+    get_phase,
+)
+
+# Simple integer piece values for fast MVV-LVA ordering in main search
+# Index by piece type: 0=None, 1=PAWN, 2=KNIGHT, 3=BISHOP, 4=ROOK, 5=QUEEN, 6=KING
+_MVV_LVA_VALUES = (0, 100, 300, 300, 500, 900, 10000)
 
 
 def organize_moves(board: Board):
     """
     This function receives a board and it returns a list of all the
     possible moves for the current player, sorted by importance.
-    It sends capturing moves at the starting positions in
-    the array (to try to increase pruning and do so earlier).
+    Captures are sorted by MVV-LVA (Most Valuable Victim - Least Valuable Attacker).
+    Promotions are prioritized. Non-captures are shuffled.
 
     Arguments:
             - board: chess board state
@@ -24,12 +33,35 @@ def organize_moves(board: Board):
     for move in board.legal_moves:
         if board.is_capture(move):
             captures.append(move)
+        elif move.promotion is not None:
+            # Promotions without capture — prioritize them
+            captures.append(move)
         else:
             non_captures.append(move)
 
-    random.shuffle(captures)
+    # Sort captures by MVV-LVA: highest victim value first, then lowest attacker
+    captures.sort(key=lambda m: _mvv_lva_score(board, m), reverse=True)
     random.shuffle(non_captures)
     return captures + non_captures
+
+
+def _mvv_lva_score(board: Board, move: Move) -> int:
+    """Fast integer MVV-LVA score for move ordering."""
+    if move.promotion is not None:
+        # Promotions get high score; queen promotion highest
+        return _MVV_LVA_VALUES[move.promotion] + 10000
+
+    # Victim value - attacker value (we want high victim, low attacker)
+    attacker = board.piece_type_at(move.from_square)
+    victim = board.piece_type_at(move.to_square)
+
+    if victim is None:
+        # En passant
+        return _MVV_LVA_VALUES[1] - _MVV_LVA_VALUES[1]  # pawn captures pawn
+
+    attacker_val = _MVV_LVA_VALUES[attacker] if attacker else 0
+    victim_val = _MVV_LVA_VALUES[victim] if victim else 0
+    return victim_val * 10 - attacker_val
 
 
 def is_tactical_move(board: Board, move: Move) -> bool:
