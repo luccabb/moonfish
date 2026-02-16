@@ -246,21 +246,17 @@ def get_phase(board: chess.Board) -> float:
     return phase
 
 
-BOARD_EVALUATION_CACHE = {}
+# All piece types to iterate over
+PIECE_TYPES = [
+    chess.PAWN,
+    chess.KNIGHT,
+    chess.BISHOP,
+    chess.ROOK,
+    chess.QUEEN,
+    chess.KING,
+]
 
 
-def board_evaluation_cache(fun):
-
-    def inner(board: chess.Board):
-        key = board._transposition_key()
-        if key not in BOARD_EVALUATION_CACHE:
-            BOARD_EVALUATION_CACHE[key] = fun(board)
-        return BOARD_EVALUATION_CACHE[key]
-
-    return inner
-
-
-@board_evaluation_cache
 def board_evaluation(board: chess.Board) -> float:
     """
     This functions receives a board and assigns a value to it, it acts as
@@ -282,23 +278,32 @@ def board_evaluation(board: chess.Board) -> float:
     eg_white = 0
     eg_black = 0
 
-    # iterate only occupied squares via piece_map()
-    for square, piece in board.piece_map().items():
-        pt = piece.piece_type
-        if piece.color == chess.WHITE:
-            mg_white += MG_PESTO[pt][square ^ 56] + MG_PIECE_VALUES[pt]
-            eg_white += EG_PESTO[pt][square ^ 56] + EG_PIECE_VALUES[pt]
-        else:
-            mg_black += MG_PESTO[pt][square] + MG_PIECE_VALUES[pt]
-            eg_black += EG_PESTO[pt][square] + EG_PIECE_VALUES[pt]
+    # Iterate only over actual pieces (typically 16-32) instead of all 64 squares
+    for piece_type in PIECE_TYPES:
+        mg_value = MG_PIECE_VALUES[piece_type]
+        eg_value = EG_PIECE_VALUES[piece_type]
+        mg_table = MG_PESTO[piece_type]
+        eg_table = EG_PESTO[piece_type]
 
-    # calculate board score based on phase
+        # White pieces: flip square vertically (square ^ 56) for PST lookup
+        for square in board.pieces(piece_type, chess.WHITE):
+            flipped = square ^ 56
+            mg_white += mg_table[flipped] + mg_value
+            eg_white += eg_table[flipped] + eg_value
+
+        # Black pieces: use square directly for PST lookup
+        for square in board.pieces(piece_type, chess.BLACK):
+            mg_black += mg_table[square] + mg_value
+            eg_black += eg_table[square] + eg_value
+
+    # calculate board score based on phase (from perspective of side to move)
     if board.turn == chess.WHITE:
         mg_score = mg_white - mg_black
         eg_score = eg_white - eg_black
     else:
         mg_score = mg_black - mg_white
         eg_score = eg_black - eg_white
+
     eval = ((mg_score * (256 - phase)) + (eg_score * phase)) / 256
 
     return eval
