@@ -1,10 +1,7 @@
 # flake8: noqa
-from typing import List, Tuple
 
 import chess
 import chess.syzygy
-
-from moonfish.config import Config
 
 ############
 # I'm using Pesto Evaluation function:
@@ -12,23 +9,10 @@ from moonfish.config import Config
 # values for Piece-Square Tables from Rofchade:
 # http://www.talkchess.com/forum3/viewtopic.php?f=2&t=68311&start=19
 ############
-MG_PIECE_VALUES = {
-    chess.PAWN: 82,
-    chess.KNIGHT: 337,
-    chess.BISHOP: 365,
-    chess.ROOK: 477,
-    chess.QUEEN: 1025,
-    chess.KING: 24000,
-}
+# Piece values indexed by piece type (0=unused, 1=PAWN, 2=KNIGHT, ..., 6=KING)
+MG_PIECE_VALUES = (0, 82, 337, 365, 477, 1025, 24000)
 
-EG_PIECE_VALUES = {
-    chess.PAWN: 94,
-    chess.KNIGHT: 281,
-    chess.BISHOP: 297,
-    chess.ROOK: 512,
-    chess.QUEEN: 936,
-    chess.KING: 24000,
-}
+EG_PIECE_VALUES = (0, 94, 281, 297, 512, 936, 24000)
 
 # fmt: off
 MG_PAWN = [
@@ -152,23 +136,26 @@ EG_KING = [
     -53, -34, -21, -11, -28, -14, -24, -43]
 # fmt: on
 
-MG_PESTO = {
-    chess.PAWN: MG_PAWN,
-    chess.KNIGHT: MG_KNIGHT,
-    chess.BISHOP: MG_BISHOP,
-    chess.ROOK: MG_ROOK,
-    chess.QUEEN: MG_QUEEN,
-    chess.KING: MG_KING,
-}
+# Indexed by piece type (0=unused, 1=PAWN, 2=KNIGHT, ..., 6=KING)
+MG_PESTO: tuple[list[int], ...] = (
+    [0],
+    MG_PAWN,
+    MG_KNIGHT,
+    MG_BISHOP,
+    MG_ROOK,
+    MG_QUEEN,
+    MG_KING,
+)
 
-EG_PESTO = {
-    chess.PAWN: EG_PAWN,
-    chess.KNIGHT: EG_KNIGHT,
-    chess.BISHOP: EG_BISHOP,
-    chess.ROOK: EG_ROOK,
-    chess.QUEEN: EG_QUEEN,
-    chess.KING: EG_KING,
-}
+EG_PESTO: tuple[list[int], ...] = (
+    [0],
+    EG_PAWN,
+    EG_KNIGHT,
+    EG_BISHOP,
+    EG_ROOK,
+    EG_QUEEN,
+    EG_KING,
+)
 
 ############
 # Tapered Evaluation: https://www.chessprogramming.org/Tapered_Eval
@@ -202,7 +189,7 @@ PHASE_VALUES = [
 ]
 
 
-def count_pieces(board: chess.Board) -> List[int]:
+def count_pieces(board: chess.Board) -> list[int]:
     """
     Counts the number of each piece on the board.
 
@@ -265,7 +252,7 @@ BOARD_EVALUATION_CACHE = {}
 def board_evaluation_cache(fun):
 
     def inner(board: chess.Board):
-        key = board.fen()
+        key = board._transposition_key()
         if key not in BOARD_EVALUATION_CACHE:
             BOARD_EVALUATION_CACHE[key] = fun(board)
         return BOARD_EVALUATION_CACHE[key]
@@ -290,41 +277,28 @@ def board_evaluation(board: chess.Board) -> float:
 
     phase = get_phase(board)
 
-    mg = {
-        chess.WHITE: 0,
-        chess.BLACK: 0,
-    }
-    eg = {
-        chess.WHITE: 0,
-        chess.BLACK: 0,
-    }
+    mg_white = 0
+    mg_black = 0
+    eg_white = 0
+    eg_black = 0
 
-    # loop through all squares and sum their piece values for both sides
-    for square in range(64):
-        piece = board.piece_at(square)
-        if piece is None:
-            continue
-
+    # iterate only occupied squares via piece_map()
+    for square, piece in board.piece_map().items():
+        pt = piece.piece_type
         if piece.color == chess.WHITE:
-            mg[piece.color] += (
-                MG_PESTO[piece.piece_type][square ^ 56]
-                + MG_PIECE_VALUES[piece.piece_type]
-            )
-            eg[piece.color] += (
-                EG_PESTO[piece.piece_type][square ^ 56]
-                + EG_PIECE_VALUES[piece.piece_type]
-            )
-        if piece.color == chess.BLACK:
-            mg[piece.color] += (
-                MG_PESTO[piece.piece_type][square] + MG_PIECE_VALUES[piece.piece_type]
-            )
-            eg[piece.color] += (
-                EG_PESTO[piece.piece_type][square] + EG_PIECE_VALUES[piece.piece_type]
-            )
+            mg_white += MG_PESTO[pt][square ^ 56] + MG_PIECE_VALUES[pt]
+            eg_white += EG_PESTO[pt][square ^ 56] + EG_PIECE_VALUES[pt]
+        else:
+            mg_black += MG_PESTO[pt][square] + MG_PIECE_VALUES[pt]
+            eg_black += EG_PESTO[pt][square] + EG_PIECE_VALUES[pt]
 
     # calculate board score based on phase
-    mg_score = mg[board.turn] - mg[not board.turn]
-    eg_score = eg[board.turn] - eg[not board.turn]
+    if board.turn == chess.WHITE:
+        mg_score = mg_white - mg_black
+        eg_score = eg_white - eg_black
+    else:
+        mg_score = mg_black - mg_white
+        eg_score = eg_black - eg_white
     eval = ((mg_score * (256 - phase)) + (eg_score * phase)) / 256
 
     return eval

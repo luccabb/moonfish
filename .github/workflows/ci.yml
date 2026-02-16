@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ['3.10', '3.11', '3.12']
+        python-version: ['3.12', '3.13']
     env:
       UV_SYSTEM_PYTHON: 1
 
@@ -31,25 +31,21 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
+        python-version: ${{ matrix.python-version }}
 
     - name: Install dev requirements
-      run: |
-        make install
+      run: uv pip install -e .
 
     - name: Test moonfish import
-      shell: bash -l {0}
       run: |
         python -c "import moonfish"
         python -c "import moonfish; import chess; board = chess.Board(); move = moonfish.search_move(board)"
 
     - name: Test CLI functionality
-      shell: bash -l {0}
       run: |
         moonfish --help
 
     - name: Run unit tests
-      shell: bash -l {0}
       run: |
         python -m unittest tests/test.py
 
@@ -72,12 +68,11 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
       
       - name: Install dev requirements
-        run: |
-          make install
-      
+        run: uv pip install -e .
+
       - name: Run ufmt
         run: ufmt check moonfish tests
 
@@ -100,12 +95,11 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
       
       - name: Install dev requirements
-        run: |
-          make install
-      
+        run: uv pip install -e .
+
       - name: Run Flake8
         run: flake8 moonfish tests
 
@@ -128,11 +122,10 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
       
       - name: Install dev requirements
-        run: |
-          make install
+        run: uv pip install -e .
 
       - name: Run mypy
         run: mypy moonfish tests

@@ -1,4 +1,3 @@
-from copy import copy
 from multiprocessing import cpu_count, Manager, Pool
 
 from chess import Board, Move
@@ -25,8 +24,8 @@ class Layer1ParallelAlphaBeta(AlphaBeta):
             board.push(move)
             arguments.append(
                 (
-                    copy(board),
-                    copy(self.config.negamax_depth) - 1,
+                    board.copy(),
+                    self.config.negamax_depth - 1,
                     self.config.null_move,
                     shared_cache,
                 )

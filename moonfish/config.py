@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional
 
 # Score for checkmate.
 CHECKMATE_SCORE = 10**8
@@ -7,7 +6,7 @@ CHECKMATE_SCORE = 10**8
 CHECKMATE_THRESHOLD = 999 * (10**4)
 
 
-@dataclass
+@dataclass(slots=True)
 class Config:
     """
     Configuration for the engine.
@@ -19,7 +18,7 @@ class Config:
     null_move: bool
     null_move_r: int
     quiescence_search_depth: int
-    syzygy_path: Optional[str]
+    syzygy_path: str | None
     syzygy_pieces: int
     checkmate_score: int = CHECKMATE_SCORE
     checkmate_threshold: int = CHECKMATE_THRESHOLD

@@ -1,5 +1,4 @@
 import multiprocessing
-from typing import Optional
 
 import click
 
@@ -15,7 +14,7 @@ def run(config: Config):
     elif config.mode == "api":
         api_main()
     elif config.mode == "bench":
-        run_bench(depth=5)
+        run_bench(depth=config.negamax_depth)
     else:
         raise ValueError("mode not supported, type --help to see supported modes.")
 
@@ -70,7 +69,7 @@ def main(
     null_move: bool,
     null_move_r: int,
     quiescence_search_depth: int,
-    syzygy_path: Optional[str],
+    syzygy_path: str | None,
     syzygy_pieces: int,
 ):
     """
