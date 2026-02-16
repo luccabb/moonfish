@@ -24,7 +24,7 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: |
         gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
-          -f content='rocket' --silent || true
+          -f content='eyes' --silent || true
 
     - uses: actions/checkout@v4
 
@@ -97,3 +97,7 @@ jobs:
         cat pr-comment.md >> $GITHUB_STEP_SUMMARY
 
         gh pr comment ${{ github.event.issue.number }} --body-file pr-comment.md
+
+        # Add thumbs up reaction to signal completion
+        gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+          -f content='+1' --silent || true
