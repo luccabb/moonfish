@@ -15,6 +15,14 @@ INF = float("inf")
 NEG_INF = float("-inf")
 NULL_MOVE = Move.null()
 
+# History table type: 64x64 array (from_square, to_square) -> score
+HISTORY_TYPE = list[list[int]]
+
+
+def new_history_table() -> HISTORY_TYPE:
+    """Create a fresh 64x64 history table initialized to zeros."""
+    return [[0] * 64 for _ in range(64)]
+
 
 class AlphaBeta:
     """
@@ -176,6 +184,7 @@ class AlphaBeta:
         cache: DictProxy | CACHE_KEY,
         alpha: float = NEG_INF,
         beta: float = INF,
+        history: HISTORY_TYPE | None = None,
     ) -> tuple[float | int, Move | None]:
         """
         This functions receives a board, depth and a player; and it returns
@@ -250,6 +259,7 @@ class AlphaBeta:
                     cache,
                     -beta,
                     -beta + 1,
+                    history,
                 )[0]
                 board.pop()
                 if board_score >= beta:
@@ -260,7 +270,7 @@ class AlphaBeta:
 
         # initializing best_score
         best_score = NEG_INF
-        moves = organize_moves(board)
+        moves = organize_moves(board, history)
 
         for move in moves:
             # make the move
@@ -273,6 +283,7 @@ class AlphaBeta:
                 cache,
                 -beta,
                 -alpha,
+                history,
             )[0]
             if board_score > self.config.checkmate_threshold:
                 board_score -= 1
@@ -284,6 +295,9 @@ class AlphaBeta:
 
             # beta-cutoff
             if board_score >= beta:
+                # Update history heuristic for quiet moves that cause beta cutoff
+                if history is not None and not board.is_capture(move):
+                    history[move.from_square][move.to_square] += depth * depth
                 cache[cache_key] = (board_score, move)
                 return board_score, move
 
@@ -313,9 +327,13 @@ class AlphaBeta:
         self.nodes = 0
         # create shared cache
         cache: CACHE_KEY = {}
+        # History table: tracks quiet moves that cause beta cutoffs
+        # Indexed by (from_square, to_square), higher = more likely to be good
+        history = new_history_table()
 
         best_move = self.negamax(
-            board, self.config.negamax_depth, self.config.null_move, cache
+            board, self.config.negamax_depth, self.config.null_move, cache,
+            history=history,
         )[1]
         assert best_move is not None, "Best move from root should not be None"
         return best_move

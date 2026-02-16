@@ -5,15 +5,17 @@ from chess import BLACK, Board, Move
 from moonfish.psqt import evaluate_capture, evaluate_piece, get_phase
 
 
-def organize_moves(board: Board):
+def organize_moves(board: Board, history: list[list[int]] | None = None):
     """
     This function receives a board and it returns a list of all the
     possible moves for the current player, sorted by importance.
     It sends capturing moves at the starting positions in
     the array (to try to increase pruning and do so earlier).
+    Quiet moves are sorted by history heuristic when available.
 
     Arguments:
             - board: chess board state
+            - history: optional 64x64 history table for quiet move ordering
 
     Returns:
             - legal_moves: list of all the possible moves for the current player.
@@ -28,7 +30,16 @@ def organize_moves(board: Board):
             non_captures.append(move)
 
     random.shuffle(captures)
-    random.shuffle(non_captures)
+
+    # Sort quiet moves by history heuristic if available
+    if history is not None:
+        non_captures.sort(
+            key=lambda m: history[m.from_square][m.to_square],
+            reverse=True,
+        )
+    else:
+        random.shuffle(non_captures)
+
     return captures + non_captures
 
 
