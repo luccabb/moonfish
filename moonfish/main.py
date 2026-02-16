@@ -3,6 +3,7 @@ from typing import Optional
 
 import click
 
+from moonfish.bench import run_bench
 from moonfish.config import Config
 from moonfish.mode.api import main as api_main
 from moonfish.mode.uci import main as uci_main
@@ -13,13 +14,18 @@ def run(config: Config):
         uci_main(config)
     elif config.mode == "api":
         api_main()
+    elif config.mode == "bench":
+        run_bench(depth=5)
     else:
         raise ValueError("mode not supported, type --help to see supported modes.")
 
 
 @click.command()
 @click.option(
-    "--mode", type=str, help="Mode to run the engine, one of [uci, api].", default="uci"
+    "--mode",
+    type=str,
+    help="Mode to run the engine, one of [uci, api, bench].",
+    default="uci",
 )
 @click.option(
     "--algorithm",
