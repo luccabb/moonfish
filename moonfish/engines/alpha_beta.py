@@ -310,10 +310,31 @@ class AlphaBeta:
 
         in_check = board.is_check()
 
+        # Futility pruning: if static eval is far below alpha, quiet moves won't help
+        # Only compute if we might use it (low depth, not in check)
+        futility_margin = 0
+        can_futility_prune = False
+        if depth <= 2 and not in_check:
+            static_eval = self.eval_board(board)
+            # Margin increases with depth: depth 1 = 100cp, depth 2 = 200cp
+            futility_margin = 100 * depth
+            can_futility_prune = static_eval + futility_margin < alpha
+
         for move_index, move in enumerate(moves):
             is_capture = board.is_capture(move)
             gives_check = board.gives_check(move)
             is_promotion = move.promotion is not None
+
+            # Futility pruning: skip quiet moves that can't raise alpha
+            # Conditions: low depth, not PV move, quiet move, not in check
+            if (
+                can_futility_prune
+                and move_index > 0  # Don't prune first move
+                and not is_capture
+                and not gives_check
+                and not is_promotion
+            ):
+                continue
 
             # make the move
             board.push(move)
