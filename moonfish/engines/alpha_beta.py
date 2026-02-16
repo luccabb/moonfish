@@ -5,7 +5,7 @@ from chess import Board, Move
 from moonfish.config import Config
 from moonfish.engines.random import choice
 from moonfish.move_ordering import organize_moves, organize_moves_quiescence
-from moonfish.psqt import board_evaluation, count_pieces
+from moonfish.psqt import MG_PIECE_VALUES, board_evaluation, count_pieces
 
 CACHE_KEY = dict[
     tuple[object, int, bool, float, float], tuple[float | int, Move | None]
@@ -14,6 +14,10 @@ CACHE_KEY = dict[
 INF = float("inf")
 NEG_INF = float("-inf")
 NULL_MOVE = Move.null()
+
+# Maximum possible capture gain for delta pruning in quiescence
+# Queen value is the largest possible single capture
+DELTA_MARGIN = MG_PIECE_VALUES[5] + 200  # queen value + safety margin
 
 
 class AlphaBeta:
@@ -131,6 +135,11 @@ class AlphaBeta:
             # beta-cutoff: position is already good enough
             if stand_pat >= beta:
                 return beta
+
+            # Delta pruning: if even the best possible capture can't improve alpha,
+            # there's no point searching further
+            if stand_pat + DELTA_MARGIN < alpha:
+                return alpha
 
             # Use stand-pat as baseline (we can always choose not to capture)
             best_score = stand_pat
@@ -266,9 +275,13 @@ class AlphaBeta:
             # make the move
             board.push(move)
 
+            # Check extension: if the move puts the opponent in check,
+            # extend the search by 1 ply to resolve the tactical situation
+            extension = 1 if board.is_check() else 0
+
             board_score = -self.negamax(
                 board,
-                depth - 1,
+                depth - 1 + extension,
                 null_move,
                 cache,
                 -beta,
