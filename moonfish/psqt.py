@@ -138,7 +138,7 @@ EG_KING = [
 
 # Indexed by piece type (0=unused, 1=PAWN, 2=KNIGHT, ..., 6=KING)
 MG_PESTO: tuple[list[int], ...] = (
-    [],
+    [0] * 64,
     MG_PAWN,
     MG_KNIGHT,
     MG_BISHOP,
@@ -148,7 +148,7 @@ MG_PESTO: tuple[list[int], ...] = (
 )
 
 EG_PESTO: tuple[list[int], ...] = (
-    [],
+    [0] * 64,
     EG_PAWN,
     EG_KNIGHT,
     EG_BISHOP,
