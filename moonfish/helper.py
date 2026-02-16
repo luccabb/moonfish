@@ -10,6 +10,7 @@ from moonfish.engines.base_engine import ChessEngine
 from moonfish.engines.l1p_alpha_beta import Layer1ParallelAlphaBeta
 from moonfish.engines.l2p_alpha_beta import Layer2ParallelAlphaBeta
 from moonfish.engines.lazy_smp import LazySMP
+from moonfish.engines.nn_engine import NNEngine
 from moonfish.engines.random import RandomEngine
 
 
@@ -21,6 +22,7 @@ class Algorithm(Enum):
     parallel_alpha_beta_layer_2 = "parallel_alpha_beta_layer_2"
     lazy_smp = "lazy_smp"
     random = "random"
+    nn = "nn"
 
 
 def get_engine(config: Config):
@@ -45,7 +47,24 @@ def get_engine(config: Config):
         return LazySMP(config)
     elif algorithm is Algorithm.random:
         return RandomEngine(config)
+    elif algorithm is Algorithm.nn:
+        return _create_nn_engine(config)
     raise Exception("algorithm not supported")
+
+
+def _create_nn_engine(config: Config) -> NNEngine:
+    """
+    Create an NN engine with the configured evaluator.
+
+    If nn_model_path is set, loads the model from file.
+    Otherwise, falls back to classical evaluation.
+    """
+    evaluator = None
+    if config.nn_model_path:
+        from moonfish.evaluation.nn import NNEvaluator
+
+        evaluator = NNEvaluator.from_file(config.nn_model_path)
+    return NNEngine(config, evaluator=evaluator)
 
 
 def _opening_book_path() -> str:
