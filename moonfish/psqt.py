@@ -137,9 +137,25 @@ EG_KING = [
 # fmt: on
 
 # Indexed by piece type (0=unused, 1=PAWN, 2=KNIGHT, ..., 6=KING)
-MG_PESTO: tuple[list[int], ...] = ([], MG_PAWN, MG_KNIGHT, MG_BISHOP, MG_ROOK, MG_QUEEN, MG_KING)
+MG_PESTO: tuple[list[int], ...] = (
+    [],
+    MG_PAWN,
+    MG_KNIGHT,
+    MG_BISHOP,
+    MG_ROOK,
+    MG_QUEEN,
+    MG_KING,
+)
 
-EG_PESTO: tuple[list[int], ...] = ([], EG_PAWN, EG_KNIGHT, EG_BISHOP, EG_ROOK, EG_QUEEN, EG_KING)
+EG_PESTO: tuple[list[int], ...] = (
+    [],
+    EG_PAWN,
+    EG_KNIGHT,
+    EG_BISHOP,
+    EG_ROOK,
+    EG_QUEEN,
+    EG_KING,
+)
 
 ############
 # Tapered Evaluation: https://www.chessprogramming.org/Tapered_Eval
