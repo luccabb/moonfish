@@ -1,7 +1,7 @@
 from multiprocessing import cpu_count, Manager, Pool
 
 from chess import Board, Move
-from moonfish.engines.alpha_beta import AlphaBeta, INF, NEG_INF
+from moonfish.engines.alpha_beta import AlphaBeta
 
 
 class LazySMP(AlphaBeta):
@@ -27,13 +27,6 @@ class LazySMP(AlphaBeta):
             ],
         )
 
-        # return best move for our original board
-        return shared_cache[
-            (
-                board._transposition_key(),
-                self.config.negamax_depth,
-                self.config.null_move,
-                NEG_INF,
-                INF,
-            )
-        ][1]
+        # return best move from the transposition table
+        tt_key = board._transposition_key()
+        return shared_cache[tt_key][1]
