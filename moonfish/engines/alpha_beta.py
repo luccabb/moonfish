@@ -1,3 +1,4 @@
+import math
 from multiprocessing.managers import DictProxy
 
 import chess.syzygy
@@ -15,10 +16,30 @@ INF = float("inf")
 NEG_INF = float("-inf")
 NULL_MOVE = Move.null()
 
+# LMR reduction table: precomputed log-based reductions
+# reduction(depth, move_number) = max(0, floor(log(depth) * log(move_number) / 2))
+_LMR_TABLE: list[list[int]] = []
+
+
+def _init_lmr_table(max_depth: int = 64, max_moves: int = 64) -> None:
+    """Precompute LMR reduction table."""
+    global _LMR_TABLE
+    _LMR_TABLE = [[0] * max_moves for _ in range(max_depth)]
+    for d in range(1, max_depth):
+        for m in range(1, max_moves):
+            _LMR_TABLE[d][m] = max(0, int(math.log(d) * math.log(m) / 2))
+
+
+_init_lmr_table()
+
+# Minimum depth and move index for LMR to apply
+LMR_MIN_DEPTH = 3
+LMR_MIN_MOVE_INDEX = 3
+
 
 class AlphaBeta:
     """
-    A class that implements alpha-beta search algorithm.
+    A class that implements alpha-beta search algorithm with LMR and PVS.
     """
 
     def __init__(self, config: Config):
@@ -181,16 +202,12 @@ class AlphaBeta:
         This functions receives a board, depth and a player; and it returns
         the best move for the current board based on how many depths we're looking ahead
         and which player is playing. Alpha and beta are used to prune the search tree.
-        Alpha represents the best score for the maximizing player (best choice (highest value)  we've found
-        along the path for max) and beta represents the best score for the minimizing player
-        (best choice (lowest value) we've found along the path for min). When Alpha is higher
-        than or equal to Beta, we can prune the search tree; because it means that the
-        maximizing player won't find a better move in this branch.
 
-        OBS:
-            - We only need to evaluate the value for leaf nodes because they are our final states
-            of the board and therefore we need to use their values to base our decision of what is
-            the best move.
+        Uses Principal Variation Search (PVS) and Late Move Reductions (LMR):
+        - PVS: First move searched with full window, remaining with null window.
+          If null window search fails high, re-search with full window.
+        - LMR: Late quiet moves at sufficient depth are searched with reduced
+          depth first. If they fail high, re-search at full depth.
 
         Arguments:
             - board: chess board state
@@ -198,10 +215,8 @@ class AlphaBeta:
             - null_move: if we want to use null move pruning
             - cache: a shared hash table to store the best
                 move for each board state and depth.
-            - alpha: best score for the maximizing player (best choice
-                (highest value)  we've found along the path for max)
-            - beta: best score for the minimizing player (best choice
-                (lowest value) we've found along the path for min).
+            - alpha: best score for the maximizing player
+            - beta: best score for the minimizing player
 
         Returns:
             - best_score, best_move: returns best move that it found and its value.
@@ -234,11 +249,13 @@ class AlphaBeta:
             cache[cache_key] = (board_score, None)
             return board_score, None
 
+        in_check = board.is_check()
+
         # null move prunning
         if (
             self.config.null_move
             and depth >= (self.config.null_move_r + 1)
-            and not board.is_check()
+            and not in_check
         ):
             board_score = self.eval_board(board)
             if board_score >= beta:
@@ -262,18 +279,73 @@ class AlphaBeta:
         best_score = NEG_INF
         moves = organize_moves(board)
 
-        for move in moves:
+        for move_index, move in enumerate(moves):
+            is_capture = board.is_capture(move)
+            is_quiet = not is_capture and move.promotion is None
+
             # make the move
             board.push(move)
 
-            board_score = -self.negamax(
-                board,
-                depth - 1,
-                null_move,
-                cache,
-                -beta,
-                -alpha,
-            )[0]
+            gives_check = board.is_check()
+
+            if move_index == 0:
+                # First move: search with full window (PV move)
+                board_score = -self.negamax(
+                    board,
+                    depth - 1,
+                    null_move,
+                    cache,
+                    -beta,
+                    -alpha,
+                )[0]
+            else:
+                # Late Move Reductions: reduce depth for late quiet moves
+                reduction = 0
+                if (
+                    is_quiet
+                    and not in_check
+                    and not gives_check
+                    and depth >= LMR_MIN_DEPTH
+                    and move_index >= LMR_MIN_MOVE_INDEX
+                ):
+                    d = min(depth, len(_LMR_TABLE) - 1)
+                    m = min(move_index, len(_LMR_TABLE[0]) - 1)
+                    reduction = _LMR_TABLE[d][m]
+                    # Don't reduce to zero or below
+                    reduction = min(reduction, depth - 2)
+
+                # PVS: null window search
+                board_score = -self.negamax(
+                    board,
+                    depth - 1 - reduction,
+                    null_move,
+                    cache,
+                    -alpha - 1,
+                    -alpha,
+                )[0]
+
+                # If LMR reduced search failed high, re-search at full depth
+                if reduction > 0 and board_score > alpha:
+                    board_score = -self.negamax(
+                        board,
+                        depth - 1,
+                        null_move,
+                        cache,
+                        -alpha - 1,
+                        -alpha,
+                    )[0]
+
+                # If PVS null window failed high, re-search with full window
+                if board_score > alpha and board_score < beta:
+                    board_score = -self.negamax(
+                        board,
+                        depth - 1,
+                        null_move,
+                        cache,
+                        -beta,
+                        -alpha,
+                    )[0]
+
             if board_score > self.config.checkmate_threshold:
                 board_score -= 1
             if board_score < -self.config.checkmate_threshold:
