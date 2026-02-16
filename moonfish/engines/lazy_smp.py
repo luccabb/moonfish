@@ -1,8 +1,8 @@
-from multiprocessing import Manager, Pool, cpu_count
+from multiprocessing import cpu_count, Manager, Pool
 
 from chess import Board, Move
 
-from moonfish.engines.alpha_beta import INF, NEG_INF, AlphaBeta
+from moonfish.engines.alpha_beta import AlphaBeta, INF, NEG_INF
 
 
 class LazySMP(AlphaBeta):

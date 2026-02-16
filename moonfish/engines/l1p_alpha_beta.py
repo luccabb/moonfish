@@ -1,4 +1,4 @@
-from multiprocessing import Manager, Pool, cpu_count
+from multiprocessing import cpu_count, Manager, Pool
 
 from chess import Board, Move
 

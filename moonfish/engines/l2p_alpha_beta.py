@@ -1,6 +1,6 @@
 from collections import defaultdict
 from functools import partial
-from multiprocessing import Manager, Pool, cpu_count
+from multiprocessing import cpu_count, Manager, Pool
 from multiprocessing.managers import DictProxy
 
 from chess import Board, Move

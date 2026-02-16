@@ -34,22 +34,18 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - name: Install dev requirements
-      run: |
-        make install
+      run: uv pip install -e .
 
     - name: Test moonfish import
-      shell: bash -l {0}
       run: |
         python -c "import moonfish"
         python -c "import moonfish; import chess; board = chess.Board(); move = moonfish.search_move(board)"
 
     - name: Test CLI functionality
-      shell: bash -l {0}
       run: |
         moonfish --help
 
     - name: Run unit tests
-      shell: bash -l {0}
       run: |
         python -m unittest tests/test.py
 
@@ -75,9 +71,8 @@ jobs:
           python-version: '3.12'
       
       - name: Install dev requirements
-        run: |
-          make install
-      
+        run: uv pip install -e .
+
       - name: Run ufmt
         run: ufmt check moonfish tests
 
@@ -103,9 +98,8 @@ jobs:
           python-version: '3.12'
       
       - name: Install dev requirements
-        run: |
-          make install
-      
+        run: uv pip install -e .
+
       - name: Run Flake8
         run: flake8 moonfish tests
 
@@ -131,8 +125,7 @@ jobs:
           python-version: '3.12'
       
       - name: Install dev requirements
-        run: |
-          make install
+        run: uv pip install -e .
 
       - name: Run mypy
         run: mypy moonfish tests
