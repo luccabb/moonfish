@@ -158,6 +158,46 @@ EG_PESTO: tuple[list[int], ...] = (
 )
 
 ############
+# Evaluation bonuses/penalties beyond PST
+############
+
+# Bishop pair bonus (having both bishops)
+MG_BISHOP_PAIR_BONUS = 30
+EG_BISHOP_PAIR_BONUS = 50
+
+# Rook on open file (no pawns on file)
+MG_ROOK_OPEN_FILE = 20
+EG_ROOK_OPEN_FILE = 10
+
+# Rook on semi-open file (no friendly pawns on file)
+MG_ROOK_SEMI_OPEN_FILE = 10
+EG_ROOK_SEMI_OPEN_FILE = 5
+
+# Isolated pawn penalty (no friendly pawns on adjacent files)
+MG_ISOLATED_PAWN = -10
+EG_ISOLATED_PAWN = -20
+
+# Doubled pawn penalty (multiple friendly pawns on the same file)
+MG_DOUBLED_PAWN = -10
+EG_DOUBLED_PAWN = -15
+
+# Passed pawn bonus by rank (rank 1 to 8, index 0 unused)
+# Bonus increases as pawn advances; huge in endgame
+# Index = rank for white (rank 2..7 are the meaningful ones; 1 and 8 don't exist for pawns)
+MG_PASSED_PAWN_BONUS = (0, 0, 5, 10, 20, 40, 60, 0)
+EG_PASSED_PAWN_BONUS = (0, 0, 10, 20, 40, 70, 120, 0)
+
+# File masks: for each file (0-7), a set of square indices on that file
+FILE_SQUARES: tuple[set[int], ...] = tuple(
+    {file + rank * 8 for rank in range(8)} for file in range(8)
+)
+
+# Adjacent files for each file (0-7)
+ADJACENT_FILES: tuple[tuple[int, ...], ...] = tuple(
+    tuple(f for f in (file - 1, file + 1) if 0 <= f <= 7) for file in range(8)
+)
+
+############
 # Tapered Evaluation: https://www.chessprogramming.org/Tapered_Eval
 # Phase values are used to determine on what phase of the game
 # we're currently at.
@@ -263,16 +303,16 @@ def board_evaluation_cache(fun):
 @board_evaluation_cache
 def board_evaluation(board: chess.Board) -> float:
     """
-    This functions receives a board and assigns a value to it, it acts as
-    an evaluation function of the current state for this game. It returns
-
+    Evaluates the board using PeSTO PST values plus structural bonuses:
+    - Pawn structure (passed, isolated, doubled pawns)
+    - Bishop pair bonus
+    - Rook on open/semi-open file
 
     Arguments:
         - board: current board state.
 
     Returns:
-        - total_value(int): integer representing
-        current value for this board.
+        - total_value(int): integer representing current value for this board.
     """
 
     phase = get_phase(board)
@@ -282,15 +322,150 @@ def board_evaluation(board: chess.Board) -> float:
     eg_white = 0
     eg_black = 0
 
+    # Track piece locations for structural evaluation
+    white_pawns: list[int] = []
+    black_pawns: list[int] = []
+    white_rooks: list[int] = []
+    black_rooks: list[int] = []
+    white_bishop_count = 0
+    black_bishop_count = 0
+
     # iterate only occupied squares via piece_map()
     for square, piece in board.piece_map().items():
         pt = piece.piece_type
         if piece.color == chess.WHITE:
             mg_white += MG_PESTO[pt][square ^ 56] + MG_PIECE_VALUES[pt]
             eg_white += EG_PESTO[pt][square ^ 56] + EG_PIECE_VALUES[pt]
+            if pt == chess.PAWN:
+                white_pawns.append(square)
+            elif pt == chess.ROOK:
+                white_rooks.append(square)
+            elif pt == chess.BISHOP:
+                white_bishop_count += 1
         else:
             mg_black += MG_PESTO[pt][square] + MG_PIECE_VALUES[pt]
             eg_black += EG_PESTO[pt][square] + EG_PIECE_VALUES[pt]
+            if pt == chess.PAWN:
+                black_pawns.append(square)
+            elif pt == chess.ROOK:
+                black_rooks.append(square)
+            elif pt == chess.BISHOP:
+                black_bishop_count += 1
+
+    # Pawn file sets for structural analysis
+    white_pawn_files = set()
+    black_pawn_files = set()
+    white_pawns_per_file: dict[int, int] = {}
+    black_pawns_per_file: dict[int, int] = {}
+
+    for sq in white_pawns:
+        f = sq % 8
+        white_pawn_files.add(f)
+        white_pawns_per_file[f] = white_pawns_per_file.get(f, 0) + 1
+
+    for sq in black_pawns:
+        f = sq % 8
+        black_pawn_files.add(f)
+        black_pawns_per_file[f] = black_pawns_per_file.get(f, 0) + 1
+
+    # --- Pawn structure ---
+    # White pawns
+    for sq in white_pawns:
+        f = sq % 8
+        r = sq // 8 + 1  # rank 1-8 (rank 1 = row 0)
+
+        # Doubled pawn: more than one pawn on same file
+        if white_pawns_per_file[f] > 1:
+            mg_white += MG_DOUBLED_PAWN
+            eg_white += EG_DOUBLED_PAWN
+
+        # Isolated pawn: no friendly pawns on adjacent files
+        has_adjacent = any(af in white_pawn_files for af in ADJACENT_FILES[f])
+        if not has_adjacent:
+            mg_white += MG_ISOLATED_PAWN
+            eg_white += EG_ISOLATED_PAWN
+
+        # Passed pawn: no enemy pawns on same or adjacent files that can block/capture
+        is_passed = True
+        check_files = (f,) + ADJACENT_FILES[f]
+        for cf in check_files:
+            for bsq in black_pawns:
+                bf = bsq % 8
+                br = bsq // 8 + 1
+                if bf == cf and br > r:  # black pawn ahead of white pawn
+                    is_passed = False
+                    break
+            if not is_passed:
+                break
+        if is_passed and 2 <= r <= 7:
+            mg_white += MG_PASSED_PAWN_BONUS[r]
+            eg_white += EG_PASSED_PAWN_BONUS[r]
+
+    # Black pawns
+    for sq in black_pawns:
+        f = sq % 8
+        r = sq // 8 + 1  # rank 1-8
+
+        # Doubled pawn
+        if black_pawns_per_file[f] > 1:
+            mg_black += MG_DOUBLED_PAWN
+            eg_black += EG_DOUBLED_PAWN
+
+        # Isolated pawn
+        has_adjacent = any(af in black_pawn_files for af in ADJACENT_FILES[f])
+        if not has_adjacent:
+            mg_black += MG_ISOLATED_PAWN
+            eg_black += EG_ISOLATED_PAWN
+
+        # Passed pawn (for black, no white pawns ahead = lower rank number)
+        is_passed = True
+        check_files = (f,) + ADJACENT_FILES[f]
+        for cf in check_files:
+            for wsq in white_pawns:
+                wf = wsq % 8
+                wr = wsq // 8 + 1
+                if wf == cf and wr < r:  # white pawn ahead of black pawn
+                    is_passed = False
+                    break
+            if not is_passed:
+                break
+        if is_passed and 2 <= r <= 7:
+            # For black, rank 7 is closest to promotion (like white rank 2)
+            # Mirror the rank: black rank 7 -> index 2, rank 2 -> index 7
+            bonus_rank = 9 - r
+            mg_black += MG_PASSED_PAWN_BONUS[bonus_rank]
+            eg_black += EG_PASSED_PAWN_BONUS[bonus_rank]
+
+    # --- Bishop pair bonus ---
+    if white_bishop_count >= 2:
+        mg_white += MG_BISHOP_PAIR_BONUS
+        eg_white += EG_BISHOP_PAIR_BONUS
+    if black_bishop_count >= 2:
+        mg_black += MG_BISHOP_PAIR_BONUS
+        eg_black += EG_BISHOP_PAIR_BONUS
+
+    # --- Rook on open/semi-open file ---
+    for sq in white_rooks:
+        f = sq % 8
+        if f not in white_pawn_files:
+            if f not in black_pawn_files:
+                # Open file: no pawns at all
+                mg_white += MG_ROOK_OPEN_FILE
+                eg_white += EG_ROOK_OPEN_FILE
+            else:
+                # Semi-open file: no friendly pawns
+                mg_white += MG_ROOK_SEMI_OPEN_FILE
+                eg_white += EG_ROOK_SEMI_OPEN_FILE
+
+    for sq in black_rooks:
+        f = sq % 8
+        if f not in black_pawn_files:
+            if f not in white_pawn_files:
+                mg_black += MG_ROOK_OPEN_FILE
+                eg_black += EG_ROOK_OPEN_FILE
+            else:
+                mg_black += MG_ROOK_SEMI_OPEN_FILE
+                eg_black += EG_ROOK_SEMI_OPEN_FILE
 
     # calculate board score based on phase
     if board.turn == chess.WHITE:
