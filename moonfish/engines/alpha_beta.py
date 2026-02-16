@@ -7,9 +7,13 @@ from moonfish.engines.random import choice
 from moonfish.move_ordering import organize_moves, organize_moves_quiescence
 from moonfish.psqt import board_evaluation, count_pieces
 
-CACHE_KEY = dict[
-    tuple[object, int, bool, float, float], tuple[float | int, Move | None]
-]
+# Transposition table entry types
+TT_EXACT = 0  # Exact score (PV node)
+TT_LOWER = 1  # Score is a lower bound (beta cutoff / fail-high)
+TT_UPPER = 2  # Score is an upper bound (fail-low / all-node)
+
+# TT entry: (score, best_move, depth, entry_type)
+TT_TYPE = dict[object, tuple[float | int, Move | None, int, int]]
 
 INF = float("inf")
 NEG_INF = float("-inf")
@@ -18,7 +22,8 @@ NULL_MOVE = Move.null()
 
 class AlphaBeta:
     """
-    A class that implements alpha-beta search algorithm.
+    A class that implements alpha-beta search algorithm with iterative deepening
+    and a proper transposition table.
     """
 
     def __init__(self, config: Config):
@@ -173,7 +178,7 @@ class AlphaBeta:
         board: Board,
         depth: int,
         null_move: bool,
-        cache: DictProxy | CACHE_KEY,
+        cache: DictProxy | TT_TYPE,
         alpha: float = NEG_INF,
         beta: float = INF,
     ) -> tuple[float | int, Move | None]:
@@ -196,30 +201,38 @@ class AlphaBeta:
             - board: chess board state
             - depth: how many depths we want to calculate for this board
             - null_move: if we want to use null move pruning
-            - cache: a shared hash table to store the best
-                move for each board state and depth.
-            - alpha: best score for the maximizing player (best choice
-                (highest value)  we've found along the path for max)
-            - beta: best score for the minimizing player (best choice
-                (lowest value) we've found along the path for min).
+            - cache: transposition table storing (score, best_move, depth, entry_type)
+            - alpha: best score for the maximizing player
+            - beta: best score for the minimizing player
 
         Returns:
             - best_score, best_move: returns best move that it found and its value.
         """
-        cache_key = (board._transposition_key(), depth, null_move, alpha, beta)
+        tt_key = board._transposition_key()
+        original_alpha = alpha
 
         self.nodes += 1
 
-        # check if board was already evaluated
-        if cache_key in cache:
-            return cache[cache_key]
+        # Probe transposition table
+        tt_move = None
+        if tt_key in cache:
+            tt_score, tt_move, tt_depth, tt_type = cache[tt_key]
+            if tt_depth >= depth:
+                if tt_type == TT_EXACT:
+                    return tt_score, tt_move
+                elif tt_type == TT_LOWER:
+                    alpha = max(alpha, tt_score)
+                elif tt_type == TT_UPPER:
+                    beta = min(beta, tt_score)
+                if alpha >= beta:
+                    return tt_score, tt_move
 
         if board.is_checkmate():
-            cache[cache_key] = (-self.config.checkmate_score, None)
+            cache[tt_key] = (-self.config.checkmate_score, None, depth, TT_EXACT)
             return (-self.config.checkmate_score, None)
 
         if board.is_stalemate():
-            cache[cache_key] = (0, None)
+            cache[tt_key] = (0, None, depth, TT_EXACT)
             return (0, None)
 
         # recursion base case
@@ -231,7 +244,7 @@ class AlphaBeta:
                 alpha,
                 beta,
             )
-            cache[cache_key] = (board_score, None)
+            cache[tt_key] = (board_score, None, 0, TT_EXACT)
             return board_score, None
 
         # null move prunning
@@ -253,14 +266,16 @@ class AlphaBeta:
                 )[0]
                 board.pop()
                 if board_score >= beta:
-                    cache[cache_key] = (beta, None)
+                    cache[tt_key] = (beta, None, depth, TT_LOWER)
                     return beta, None
 
         best_move = None
 
         # initializing best_score
         best_score = NEG_INF
-        moves = organize_moves(board)
+
+        # Get move list, placing TT move first if available
+        moves = organize_moves(board, tt_move=tt_move)
 
         for move in moves:
             # make the move
@@ -284,7 +299,7 @@ class AlphaBeta:
 
             # beta-cutoff
             if board_score >= beta:
-                cache[cache_key] = (board_score, move)
+                cache[tt_key] = (board_score, move, depth, TT_LOWER)
                 return board_score, move
 
             # update best move
@@ -305,17 +320,33 @@ class AlphaBeta:
         if not best_move:
             best_move = self.random_move(board)
 
+        # Determine TT entry type based on the score relative to original bounds
+        if best_score <= original_alpha:
+            tt_type = TT_UPPER  # Failed low: score is an upper bound
+        elif best_score >= beta:
+            tt_type = TT_LOWER  # Failed high: score is a lower bound
+        else:
+            tt_type = TT_EXACT  # Exact score
+
         # save result before returning
-        cache[cache_key] = (best_score, best_move)
+        cache[tt_key] = (best_score, best_move, depth, tt_type)
         return best_score, best_move
 
     def search_move(self, board: Board) -> Move:
         self.nodes = 0
-        # create shared cache
-        cache: CACHE_KEY = {}
+        # create shared transposition table (persists across iterations)
+        cache: TT_TYPE = {}
 
-        best_move = self.negamax(
-            board, self.config.negamax_depth, self.config.null_move, cache
-        )[1]
+        best_move = None
+
+        # Iterative deepening: search from depth 1 up to target depth
+        # Each iteration populates the TT, which helps order moves in the next
+        for d in range(1, self.config.negamax_depth + 1):
+            score, move = self.negamax(
+                board, d, self.config.null_move, cache
+            )
+            if move is not None:
+                best_move = move
+
         assert best_move is not None, "Best move from root should not be None"
         return best_move

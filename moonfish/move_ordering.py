@@ -5,15 +5,16 @@ from chess import BLACK, Board, Move
 from moonfish.psqt import evaluate_capture, evaluate_piece, get_phase
 
 
-def organize_moves(board: Board):
+def organize_moves(board: Board, tt_move: "Move | None" = None):
     """
     This function receives a board and it returns a list of all the
     possible moves for the current player, sorted by importance.
-    It sends capturing moves at the starting positions in
-    the array (to try to increase pruning and do so earlier).
+    The TT move (from the transposition table) is placed first,
+    then captures, then non-captures.
 
     Arguments:
             - board: chess board state
+            - tt_move: best move from transposition table (searched first)
 
     Returns:
             - legal_moves: list of all the possible moves for the current player.
@@ -22,6 +23,9 @@ def organize_moves(board: Board):
     captures = []
 
     for move in board.legal_moves:
+        # Skip TT move — it will be placed at the front
+        if tt_move is not None and move == tt_move:
+            continue
         if board.is_capture(move):
             captures.append(move)
         else:
@@ -29,7 +33,12 @@ def organize_moves(board: Board):
 
     random.shuffle(captures)
     random.shuffle(non_captures)
-    return captures + non_captures
+
+    result = captures + non_captures
+    # Place TT move first if it's a legal move
+    if tt_move is not None:
+        result.insert(0, tt_move)
+    return result
 
 
 def is_tactical_move(board: Board, move: Move) -> bool:
