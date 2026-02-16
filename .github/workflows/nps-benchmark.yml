@@ -1,0 +1,99 @@
+name: NPS Benchmark
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  UV_SYSTEM_PYTHON: 1
+
+jobs:
+  nps-benchmark:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/run-nps-benchmark')
+
+    steps:
+    - name: React to comment
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+          -f content='rocket' --silent || true
+
+    - uses: actions/checkout@v4
+
+    - name: Checkout PR branch
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: gh pr checkout ${{ github.event.issue.number }}
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+        cache-dependency-glob: "requirements.txt"
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: make install
+
+    - name: Run NPS benchmark
+      run: |
+        python -m moonfish.main --mode bench --depth 5 2>&1 | tee bench-output.txt
+
+    - name: Parse results and comment on PR
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        OUTPUT="bench-output.txt"
+
+        TOTAL_TIME=$(grep "^Total time" "$OUTPUT" | awk '{print $NF}')
+        TOTAL_NODES=$(grep "^Nodes searched" "$OUTPUT" | awk '{print $NF}')
+        NPS=$(grep "^Nodes/second" "$OUTPUT" | awk '{print $NF}')
+        NUM_POSITIONS=$(grep -c "^Position" "$OUTPUT")
+
+        # Format numbers with commas
+        TOTAL_NODES_FMT=$(printf "%'d" "$TOTAL_NODES")
+        NPS_FMT=$(printf "%'d" "$NPS")
+
+        # Build per-position breakdown
+        PER_POS=$(grep "^Position" "$OUTPUT")
+
+        cat > pr-comment.md << EOF
+        ## ⚡ NPS Benchmark Results
+
+        | Metric | Value |
+        |--------|-------|
+        | Depth | 5 |
+        | Positions | $NUM_POSITIONS |
+        | Total nodes | $TOTAL_NODES_FMT |
+        | Total time | ${TOTAL_TIME}s |
+        | Nodes/second | $NPS_FMT |
+
+        > **Node count is the primary signal** — it's deterministic and catches search behavior changes. If the node count changes, the PR changed search behavior. NPS is informational only (CI runner performance varies).
+
+        <details><summary>Per-position breakdown</summary>
+
+        \`\`\`
+        $PER_POS
+        \`\`\`
+
+        </details>
+        EOF
+
+        # Remove leading whitespace from heredoc
+        sed -i 's/^        //' pr-comment.md
+
+        cat pr-comment.md >> $GITHUB_STEP_SUMMARY
+
+        gh pr comment ${{ github.event.issue.number }} --body-file pr-comment.md
