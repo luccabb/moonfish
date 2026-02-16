@@ -1,5 +1,8 @@
+from copy import copy
+from enum import IntEnum
 from multiprocessing.managers import DictProxy
 
+import chess.polyglot
 import chess.syzygy
 from chess import Board, Move
 from moonfish.config import Config
@@ -7,9 +10,20 @@ from moonfish.engines.random import choice
 from moonfish.move_ordering import organize_moves, organize_moves_quiescence
 from moonfish.psqt import board_evaluation, count_pieces
 
-CACHE_KEY = dict[
-    tuple[object, int, bool, float, float], tuple[float | int, Move | None]
-]
+
+class Bound(IntEnum):
+    """Transposition table bound types."""
+
+    EXACT = 0  # Score is exact (PV node, score was within alpha-beta window)
+    LOWER_BOUND = 1  # Score is at least this value (failed high / beta cutoff)
+    UPPER_BOUND = 2  # Score is at most this value (failed low)
+
+
+# Depth value for terminal positions (checkmate/stalemate) - always usable
+DEPTH_MAX = 10000
+
+# Cache: zobrist_hash -> (score, best_move, bound_type, depth)
+CACHE_TYPE = dict[int, tuple[float | int, Move | None, Bound, int]]
 
 INF = float("inf")
 NEG_INF = float("-inf")
@@ -173,7 +187,7 @@ class AlphaBeta:
         board: Board,
         depth: int,
         null_move: bool,
-        cache: DictProxy | CACHE_KEY,
+        cache: DictProxy | CACHE_TYPE,
         alpha: float = NEG_INF,
         beta: float = INF,
     ) -> tuple[float | int, Move | None]:
@@ -206,20 +220,38 @@ class AlphaBeta:
         Returns:
             - best_score, best_move: returns best move that it found and its value.
         """
-        cache_key = (board._transposition_key(), depth, null_move, alpha, beta)
+        original_alpha = alpha
+        cache_key = chess.polyglot.zobrist_hash(board)
 
         self.nodes += 1
 
-        # check if board was already evaluated
+        # Check transposition table
         if cache_key in cache:
-            return cache[cache_key]
+            cached_score, cached_move, cached_bound, cached_depth = cache[cache_key]
+
+            # Only use score if cached search was at least as deep as we need
+            # Use cached result if:
+            # - EXACT: score is exact
+            # - LOWER_BOUND and score >= beta: true score is at least cached, causes cutoff
+            # - UPPER_BOUND and score <= alpha: true score is at most cached, no improvement
+            if cached_depth >= depth and (
+                cached_bound == Bound.EXACT
+                or (cached_bound == Bound.LOWER_BOUND and cached_score >= beta)
+                or (cached_bound == Bound.UPPER_BOUND and cached_score <= alpha)
+            ):
+                return cached_score, cached_move
 
         if board.is_checkmate():
-            cache[cache_key] = (-self.config.checkmate_score, None)
+            cache[cache_key] = (
+                -self.config.checkmate_score,
+                None,
+                Bound.EXACT,
+                DEPTH_MAX,
+            )
             return (-self.config.checkmate_score, None)
 
         if board.is_stalemate():
-            cache[cache_key] = (0, None)
+            cache[cache_key] = (0, None, Bound.EXACT, DEPTH_MAX)
             return (0, None)
 
         # recursion base case
@@ -231,12 +263,13 @@ class AlphaBeta:
                 alpha,
                 beta,
             )
-            cache[cache_key] = (board_score, None)
+            cache[cache_key] = (board_score, None, Bound.EXACT, depth)
             return board_score, None
 
-        # null move prunning
+        # null move pruning
         if (
             self.config.null_move
+            and null_move
             and depth >= (self.config.null_move_r + 1)
             and not board.is_check()
         ):
@@ -253,12 +286,11 @@ class AlphaBeta:
                 )[0]
                 board.pop()
                 if board_score >= beta:
-                    cache[cache_key] = (beta, None)
+                    # Null move confirmed beta cutoff - this is a lower bound
+                    cache[cache_key] = (beta, None, Bound.LOWER_BOUND, depth)
                     return beta, None
 
         best_move = None
-
-        # initializing best_score
         best_score = NEG_INF
         moves = organize_moves(board)
 
@@ -282,37 +314,39 @@ class AlphaBeta:
             # take move back
             board.pop()
 
-            # beta-cutoff
-            if board_score >= beta:
-                cache[cache_key] = (board_score, move)
-                return board_score, move
-
             # update best move
             if board_score > best_score:
                 best_score = board_score
                 best_move = move
 
-            # setting alpha variable to do pruning
-            alpha = max(alpha, board_score)
+            # beta-cutoff: opponent won't allow this position
+            if best_score >= beta:
+                # LOWER_BOUND: true score is at least best_score
+                cache[cache_key] = (best_score, best_move, Bound.LOWER_BOUND, depth)
+                return best_score, best_move
 
-            # alpha beta pruning when we already found a solution that is at least as
-            # good as the current one those branches won't be able to influence the
-            # final decision so we don't need to waste time analyzing them
-            if alpha >= beta:
-                break
+            # update alpha
+            alpha = max(alpha, best_score)
 
         # if no best move, make a random one
         if not best_move:
             best_move = self.random_move(board)
 
-        # save result before returning
-        cache[cache_key] = (best_score, best_move)
+        # Determine bound type based on whether we improved alpha
+        if best_score <= original_alpha:
+            # Failed low: we didn't find anything better than what we already had
+            bound = Bound.UPPER_BOUND
+        else:
+            # Score is exact: we found a score within the window
+            bound = Bound.EXACT
+
+        cache[cache_key] = (best_score, best_move, bound, depth)
         return best_score, best_move
 
     def search_move(self, board: Board) -> Move:
         self.nodes = 0
         # create shared cache
-        cache: CACHE_KEY = {}
+        cache: CACHE_TYPE = {}
 
         best_move = self.negamax(
             board, self.config.negamax_depth, self.config.null_move, cache
