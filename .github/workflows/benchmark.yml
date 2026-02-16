@@ -1,14 +1,8 @@
 name: Stockfish Benchmark
 
 on:
-  pull_request:
-    paths:
-      # Only run benchmarks when engine code changes
-      - 'moonfish/**'
-      - 'opening_book/**'
-      - 'scripts/**'
-      - 'pyproject.toml'
-      - 'requirements.txt'
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
@@ -19,20 +13,22 @@ env:
   MOONFISH_OPENING_BOOK: ${{ github.workspace }}/opening_book/cerebellum.bin
 
 jobs:
-  react-start:
+  react:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/run-stockfish-benchmark')
     steps:
-    - name: Add eyes reaction to PR
+    - name: React to comment
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/reactions \
+        gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
           -f content='eyes' --silent || true
 
   benchmark:
     runs-on: ubuntu-latest
-    needs: react-start
+    needs: react
     strategy:
       fail-fast: false
       matrix:
@@ -46,6 +42,11 @@ jobs:
       with:
         lfs: false
         fetch-depth: 0
+
+    - name: Checkout PR branch
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: gh pr checkout ${{ github.event.issue.number }}
 
     - name: Ensure opening book
       run: |
@@ -308,24 +309,16 @@ jobs:
         cat pr-comment.md >> $GITHUB_STEP_SUMMARY
 
     - name: Comment on PR
-      if: github.event_name == 'pull_request'
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        gh pr comment ${{ github.event.pull_request.number }} --body-file pr-comment.md
+        gh pr comment ${{ github.event.issue.number }} --body-file pr-comment.md
 
-    - name: Update PR reaction (eyes -> thumbs up)
-      if: github.event_name == 'pull_request'
+    - name: React with thumbs up on completion
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        # Remove eyes reaction
-        REACTIONS=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/reactions --jq '.[] | select(.content == "eyes") | .id' || true)
-        for ID in $REACTIONS; do
-          gh api -X DELETE repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/reactions/$ID --silent || true
-        done
-        # Add thumbs up
-        gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/reactions \
+        gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
           -f content='+1' --silent || true
 
     - name: Upload aggregated results

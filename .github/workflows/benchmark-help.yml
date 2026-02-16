@@ -1,0 +1,35 @@
+name: Benchmark Help
+
+on:
+  pull_request:
+    types: [opened]
+    paths:
+      - 'moonfish/**'
+      - 'opening_book/**'
+      - 'scripts/**'
+      - 'pyproject.toml'
+      - 'requirements.txt'
+
+permissions:
+  pull-requests: write
+
+jobs:
+  comment:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Post benchmark instructions
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh pr comment ${{ github.event.pull_request.number }} \
+          --repo ${{ github.repository }} \
+          --body '### Benchmarks
+
+        The following benchmarks are available for this PR:
+
+        | Command | Description |
+        |---------|-------------|
+        | `/run-nps-benchmark` | NPS speed benchmark (depth 5, 48 positions) |
+        | `/run-stockfish-benchmark` | Stockfish strength benchmark (300 games) |
+
+        Post a comment with the command to trigger a benchmark run.'
