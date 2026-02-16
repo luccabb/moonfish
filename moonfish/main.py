@@ -39,7 +39,7 @@ def run(config: Config):
     "--null-move",
     type=bool,
     help="If True, use null move prunning.",
-    default=False,
+    default=True,
 )
 @click.option(
     "--null-move-r",

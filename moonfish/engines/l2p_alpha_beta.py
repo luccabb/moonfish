@@ -74,68 +74,69 @@ class Layer2ParallelAlphaBeta(AlphaBeta):
         return boards_and_moves
 
     def search_move(self, board: Board) -> Move:
+        self.nodes = 0
         START_LAYER = 2
         # start multiprocessing
         nprocs = cpu_count()
-        pool = Pool(processes=nprocs)
-        manager = Manager()
-        shared_cache = manager.dict()
 
-        # pointer that help us in finding the best next move
-        board_to_move_that_generates_it = manager.dict()
+        with Pool(processes=nprocs) as pool, Manager() as manager:
+            shared_cache = manager.dict()
 
-        # starting board list
-        board_list = [(board, board, 0)]
+            # pointer that help us in finding the best next move
+            board_to_move_that_generates_it = manager.dict()
 
-        # generating all possible boards for up to 2 moves ahead
-        for _ in range(START_LAYER):
-            arguments = [
-                (board, board_to_move_that_generates_it, layer)
-                for board, _, layer in board_list
+            # starting board list
+            board_list = [(board, board, 0)]
+
+            # generating all possible boards for up to 2 moves ahead
+            for _ in range(START_LAYER):
+                arguments = [
+                    (board, board_to_move_that_generates_it, layer)
+                    for board, _, layer in board_list
+                ]
+                processes = pool.starmap(self.generate_board_and_moves, arguments)
+                board_list = [board for board in sum(processes, [])]
+
+            negamax_arguments = [
+                (
+                    board,
+                    self.config.negamax_depth - START_LAYER,
+                    self.config.null_move,
+                    shared_cache,
+                )
+                for board, _, _ in board_list
             ]
-            processes = pool.starmap(self.generate_board_and_moves, arguments)
-            board_list = [board for board in sum(processes, [])]
 
-        negamax_arguments = [
-            (
-                board,
-                self.config.negamax_depth - START_LAYER,
-                self.config.null_move,
-                shared_cache,
-            )
-            for board, _, _ in board_list
-        ]
+            parallel_layer_result = pool.starmap(self.negamax, negamax_arguments)
 
-        parallel_layer_result = pool.starmap(self.negamax, negamax_arguments)
+            # grouping output based on the board that generates it
+            groups = defaultdict(list)
 
-        # grouping output based on the  board that generates it
-        groups = defaultdict(list)
+            # adding information about the board and layer
+            # that generates the results and separating them
+            # into groups based on the root board
+            for i in range(len(parallel_layer_result)):
+                groups[board_list[i][1].fen()].append(
+                    (*parallel_layer_result[i], board_list[i][0], board_list[i][2])
+                )
 
-        # adding information about the board and layer
-        # that generates the results and separating them
-        # into groups based on the root board
-        for i in range(len(parallel_layer_result)):
-            groups[board_list[i][1].fen()].append(
-                (*parallel_layer_result[i], board_list[i][0], board_list[i][2])
-            )
+            best_boards = []
 
-        best_boards = []
+            for group in groups.values():
+                # layer and checkmate corrections
+                # they are needed to adjust for
+                # boards from different layers
+                group = list(map(LAYER_SIGNAL_CORRECTION, group))
+                group = list(map(self.checkmate_correction, group))
+                # get best move from group
+                group.sort(key=lambda a: a[0])
+                best_boards.append(group[0])
 
-        for group in groups.values():
-            # layer and checkmate corrections
-            # they are needed to adjust for
-            # boards from different layers
-            group = list(map(LAYER_SIGNAL_CORRECTION, group))
-            group = list(map(self.checkmate_correction, group))
-            # get best move from group
-            group.sort(key=lambda a: a[0])
-            best_boards.append(group[0])
+            # get best board
+            best_boards.sort(key=lambda a: a[0], reverse=True)
+            best_board = best_boards[0][2].fen()
 
-        # get best board
-        best_boards.sort(key=lambda a: a[0], reverse=True)
-        best_board = best_boards[0][2].fen()
+            # get move that results in best board
+            best_move = board_to_move_that_generates_it[best_board]
 
-        # get move that results in best board
-        best_move = board_to_move_that_generates_it[best_board]
-
-        return best_move
+            return best_move
