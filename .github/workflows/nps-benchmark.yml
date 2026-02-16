@@ -1,12 +1,8 @@
 name: NPS Benchmark
 
 on:
-  pull_request:
-    paths:
-      # Only run benchmarks when engine code changes
-      - 'moonfish/**'
-      - 'pyproject.toml'
-      - 'requirements.txt'
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
@@ -18,10 +14,24 @@ env:
 jobs:
   nps-benchmark:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/run-nps-benchmark')
 
     steps:
+    - name: React to comment
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+          -f content='eyes' --silent || true
+
     - uses: actions/checkout@v4
+
+    - name: Checkout PR branch
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: gh pr checkout ${{ github.event.issue.number }}
 
     - name: Install uv
       uses: astral-sh/setup-uv@v5
@@ -86,4 +96,8 @@ jobs:
 
         cat pr-comment.md >> $GITHUB_STEP_SUMMARY
 
-        gh pr comment ${{ github.event.pull_request.number }} --body-file pr-comment.md
+        gh pr comment ${{ github.event.issue.number }} --body-file pr-comment.md
+
+        # Add thumbs up reaction to signal completion
+        gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+          -f content='+1' --silent || true
