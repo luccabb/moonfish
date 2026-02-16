@@ -7,33 +7,34 @@ from moonfish.engines.alpha_beta import AlphaBeta, INF, NEG_INF
 class LazySMP(AlphaBeta):
 
     def search_move(self, board: Board) -> Move:
+        self.nodes = 0
         # start multiprocessing
         nprocs = cpu_count()
-        pool = Pool(processes=nprocs)
-        manager = Manager()
-        shared_cache = manager.dict()
-        # executing all the moves at layer 1 in parallel
-        # starmap blocks until all process are done
-        pool.starmap(
-            self.negamax,
-            [
+        with Pool(processes=nprocs) as pool, Manager() as manager:
+            shared_cache = manager.dict()
+            # executing negamax in parallel N times
+            # all processes share the cache for faster convergence
+            # starmap blocks until all processes are done
+            pool.starmap(
+                self.negamax,
+                [
+                    (
+                        board,
+                        self.config.negamax_depth,
+                        self.config.null_move,
+                        shared_cache,
+                    )
+                    for _ in range(nprocs)
+                ],
+            )
+
+            # return best move for our original board
+            return shared_cache[
                 (
-                    board,
+                    board._transposition_key(),
                     self.config.negamax_depth,
                     self.config.null_move,
-                    shared_cache,
+                    NEG_INF,
+                    INF,
                 )
-                for _ in range(nprocs)
-            ],
-        )
-
-        # return best move for our original board
-        return shared_cache[
-            (
-                board._transposition_key(),
-                self.config.negamax_depth,
-                self.config.null_move,
-                NEG_INF,
-                INF,
-            )
-        ][1]
+            ][1]
