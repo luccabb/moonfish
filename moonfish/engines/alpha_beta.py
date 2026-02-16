@@ -15,6 +15,9 @@ INF = float("inf")
 NEG_INF = float("-inf")
 NULL_MOVE = Move.null()
 
+# Number of killer moves to store per ply
+NUM_KILLERS = 2
+
 
 class AlphaBeta:
     """
@@ -168,6 +171,19 @@ class AlphaBeta:
 
         return best_score
 
+    def _store_killer(
+        self, killers: list[list[Move | None]], ply: int, move: Move
+    ) -> None:
+        """Store a killer move at the given ply, shifting the existing one."""
+        if ply >= len(killers):
+            return
+        # Don't store duplicates
+        if killers[ply][0] == move:
+            return
+        # Shift: slot 1 gets old slot 0, slot 0 gets new move
+        killers[ply][1] = killers[ply][0]
+        killers[ply][0] = move
+
     def negamax(
         self,
         board: Board,
@@ -176,6 +192,8 @@ class AlphaBeta:
         cache: DictProxy | CACHE_KEY,
         alpha: float = NEG_INF,
         beta: float = INF,
+        ply: int = 0,
+        killers: list[list[Move | None]] | None = None,
     ) -> tuple[float | int, Move | None]:
         """
         This functions receives a board, depth and a player; and it returns
@@ -198,10 +216,10 @@ class AlphaBeta:
             - null_move: if we want to use null move pruning
             - cache: a shared hash table to store the best
                 move for each board state and depth.
-            - alpha: best score for the maximizing player (best choice
-                (highest value)  we've found along the path for max)
-            - beta: best score for the minimizing player (best choice
-                (lowest value) we've found along the path for min).
+            - alpha: best score for the maximizing player
+            - beta: best score for the minimizing player
+            - ply: current ply from root (for killer move indexing)
+            - killers: killer move table [ply][slot] -> Move
 
         Returns:
             - best_score, best_move: returns best move that it found and its value.
@@ -250,6 +268,8 @@ class AlphaBeta:
                     cache,
                     -beta,
                     -beta + 1,
+                    ply + 1,
+                    killers,
                 )[0]
                 board.pop()
                 if board_score >= beta:
@@ -260,7 +280,10 @@ class AlphaBeta:
 
         # initializing best_score
         best_score = NEG_INF
-        moves = organize_moves(board)
+
+        # Get killer moves for this ply
+        ply_killers = killers[ply] if killers is not None and ply < len(killers) else None
+        moves = organize_moves(board, killers=ply_killers)
 
         for move in moves:
             # make the move
@@ -273,6 +296,8 @@ class AlphaBeta:
                 cache,
                 -beta,
                 -alpha,
+                ply + 1,
+                killers,
             )[0]
             if board_score > self.config.checkmate_threshold:
                 board_score -= 1
@@ -284,6 +309,9 @@ class AlphaBeta:
 
             # beta-cutoff
             if board_score >= beta:
+                # Store killer move for quiet moves that cause cutoff
+                if killers is not None and not board.is_capture(move):
+                    self._store_killer(killers, ply, move)
                 cache[cache_key] = (board_score, move)
                 return board_score, move
 
@@ -314,8 +342,13 @@ class AlphaBeta:
         # create shared cache
         cache: CACHE_KEY = {}
 
+        # Initialize killer move table: max_depth + some margin for extensions
+        max_ply = self.config.negamax_depth + 20
+        killers: list[list[Move | None]] = [[None, None] for _ in range(max_ply)]
+
         best_move = self.negamax(
-            board, self.config.negamax_depth, self.config.null_move, cache
+            board, self.config.negamax_depth, self.config.null_move, cache,
+            killers=killers,
         )[1]
         assert best_move is not None, "Best move from root should not be None"
         return best_move

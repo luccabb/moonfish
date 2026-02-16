@@ -5,31 +5,53 @@ from chess import BLACK, Board, Move
 from moonfish.psqt import evaluate_capture, evaluate_piece, get_phase
 
 
-def organize_moves(board: Board):
+def organize_moves(
+    board: Board,
+    killers: "list[Move | None] | None" = None,
+):
     """
     This function receives a board and it returns a list of all the
     possible moves for the current player, sorted by importance.
-    It sends capturing moves at the starting positions in
-    the array (to try to increase pruning and do so earlier).
+    Order: captures first, then killer moves, then remaining quiet moves.
 
     Arguments:
             - board: chess board state
+            - killers: list of killer moves for the current ply (tried after captures)
 
     Returns:
             - legal_moves: list of all the possible moves for the current player.
     """
     non_captures = []
     captures = []
+    killer_set = set()
+
+    # Build set of killer moves for fast lookup
+    if killers is not None:
+        for k in killers:
+            if k is not None:
+                killer_set.add(k)
 
     for move in board.legal_moves:
         if board.is_capture(move):
             captures.append(move)
+        elif move in killer_set:
+            # Skip killers from non_captures; we'll insert them after captures
+            continue
         else:
             non_captures.append(move)
 
     random.shuffle(captures)
     random.shuffle(non_captures)
-    return captures + non_captures
+
+    # Insert legal killer moves between captures and quiet moves
+    killer_moves = []
+    if killers is not None:
+        legal_moves_set = set(board.legal_moves)
+        for k in killers:
+            if k is not None and k in legal_moves_set and not board.is_capture(k):
+                killer_moves.append(k)
+
+    return captures + killer_moves + non_captures
 
 
 def is_tactical_move(board: Board, move: Move) -> bool:
