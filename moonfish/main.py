@@ -62,6 +62,12 @@ def run(config: Config):
     help="Remaining pieces to use syzygy endgame tablebases.",
     default=5,
 )
+@click.option(
+    "--nn-model-path",
+    type=str,
+    help="Path to NNUE model weights (.npz) for the nn algorithm.",
+    default=None,
+)
 def main(
     mode: str,
     algorithm: str,
@@ -71,6 +77,7 @@ def main(
     quiescence_search_depth: int,
     syzygy_path: str | None,
     syzygy_pieces: int,
+    nn_model_path: str | None,
 ):
     """
     Starts the engine according to the options provided.
@@ -84,6 +91,7 @@ def main(
         quiescence_search_depth=quiescence_search_depth,
         syzygy_path=syzygy_path,
         syzygy_pieces=syzygy_pieces,
+        nn_model_path=nn_model_path,
     )
     run(config)
 

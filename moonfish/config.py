@@ -22,3 +22,4 @@ class Config:
     syzygy_pieces: int
     checkmate_score: int = CHECKMATE_SCORE
     checkmate_threshold: int = CHECKMATE_THRESHOLD
+    nn_model_path: str | None = None
