@@ -15,6 +15,7 @@ authors = [
 dependencies = [
   "chess",
   "click",
+  "numpy",
   "Flask",
   "Flask-Cors",
   "parameterized",
@@ -31,6 +32,9 @@ dependencies = [
 moonfish = "moonfish.main:main"
 
 [project.optional-dependencies]
+nn = [
+  "torch>=2.0.0",
+]
 rl = [
   "fastapi>=0.100.0",
   "uvicorn[standard]>=0.23.0",
@@ -39,18 +43,20 @@ rl = [
 ]
 
 [tool.setuptools]
-packages = ["moonfish", "moonfish.rl", "moonfish.rl.server", "moonfish.rl.examples"]
+packages = ["moonfish", "moonfish.engines", "moonfish.evaluation", "moonfish.rl", "moonfish.rl.server", "moonfish.rl.examples"]
 
 [tool.setuptools_scm]
 version_scheme = "post-release"
 local_scheme = "no-local-version"
 
 [tool.setuptools.package-data]
-"moonfish" = ["py.typed"]
+"moonfish" = ["py.typed", "models/*.npz"]
 
 [[tool.mypy.overrides]]
 module = [
     "parameterized.*",
+    "torch",
+    "torch.*",
     "httpx",
     "httpx.*",
     "fastapi",

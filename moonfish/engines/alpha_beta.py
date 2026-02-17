@@ -1,3 +1,4 @@
+import time
 from multiprocessing.managers import DictProxy
 
 import chess.syzygy
@@ -15,6 +16,9 @@ INF = float("inf")
 NEG_INF = float("-inf")
 NULL_MOVE = Move.null()
 
+# Maximum depth for iterative deepening time-based search
+MAX_DEPTH = 100
+
 
 class AlphaBeta:
     """
@@ -24,6 +28,8 @@ class AlphaBeta:
     def __init__(self, config: Config):
         self.config = config
         self.nodes: int = 0
+        self._stop_time: float = 0.0  # Deadline for time-managed search
+        self._time_abort: bool = False  # Set True when time runs out
 
         # Open Syzygy tablebase once at initialization (not on every eval)
         self.tablebase = None
@@ -97,6 +103,15 @@ class AlphaBeta:
         in_check = board.is_check()
 
         self.nodes += 1
+
+        # Check time limit periodically (every 512 nodes)
+        if self._stop_time and (self.nodes & 511) == 0:
+            if time.perf_counter() >= self._stop_time:
+                self._time_abort = True
+
+        # If time is up, return stand-pat immediately
+        if self._time_abort:
+            return self.eval_board(board)
 
         if board.is_checkmate():
             return -self.config.checkmate_score
@@ -210,6 +225,15 @@ class AlphaBeta:
 
         self.nodes += 1
 
+        # Check time limit periodically (every 512 nodes)
+        if self._stop_time and (self.nodes & 511) == 0:
+            if time.perf_counter() >= self._stop_time:
+                self._time_abort = True
+
+        # If time is up, return immediately with a rough score
+        if self._time_abort:
+            return 0, None
+
         # check if board was already evaluated
         if cache_key in cache:
             return cache[cache_key]
@@ -311,6 +335,8 @@ class AlphaBeta:
 
     def search_move(self, board: Board) -> Move:
         self.nodes = 0
+        self._time_abort = False
+        self._stop_time = 0.0
         # create shared cache
         cache: CACHE_KEY = {}
 
@@ -318,4 +344,52 @@ class AlphaBeta:
             board, self.config.negamax_depth, self.config.null_move, cache
         )[1]
         assert best_move is not None, "Best move from root should not be None"
+        return best_move
+
+    def search_move_timed(self, board: Board, time_limit_s: float) -> Move:
+        """
+        Search using iterative deepening with a time limit.
+
+        Searches from depth 1 upward. If a depth completes within the time
+        limit, its result is saved. If time runs out mid-search, the result
+        from the last completed depth is used.
+
+        Arguments:
+            - board: chess board state
+            - time_limit_s: maximum time in seconds for the entire search
+
+        Returns:
+            - best_move: the best move found within the time limit
+        """
+        self.nodes = 0
+        self._time_abort = False
+        self._stop_time = time.perf_counter() + time_limit_s
+        cache: CACHE_KEY = {}
+
+        best_move = None
+
+        for depth in range(1, MAX_DEPTH + 1):
+            score, move = self.negamax(
+                board, depth, self.config.null_move, cache,
+            )
+
+            if self._time_abort:
+                # Time ran out during this depth — discard partial result
+                break
+
+            if move is not None:
+                best_move = move
+
+            # If time remaining is less than what we'd need for the next depth
+            # (rough heuristic: next depth takes ~4x longer), stop early
+            elapsed = time.perf_counter() - (self._stop_time - time_limit_s)
+            remaining = self._stop_time - time.perf_counter()
+            if remaining < elapsed * 3:
+                break
+
+        self._stop_time = 0.0
+        self._time_abort = False
+
+        if best_move is None:
+            best_move = self.random_move(board)
         return best_move

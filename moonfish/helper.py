@@ -10,6 +10,7 @@ from moonfish.engines.base_engine import ChessEngine
 from moonfish.engines.l1p_alpha_beta import Layer1ParallelAlphaBeta
 from moonfish.engines.l2p_alpha_beta import Layer2ParallelAlphaBeta
 from moonfish.engines.lazy_smp import LazySMP
+from moonfish.engines.nn_engine import NNEngine
 from moonfish.engines.random import RandomEngine
 
 
@@ -21,6 +22,7 @@ class Algorithm(Enum):
     parallel_alpha_beta_layer_2 = "parallel_alpha_beta_layer_2"
     lazy_smp = "lazy_smp"
     random = "random"
+    nn = "nn"
 
 
 def get_engine(config: Config):
@@ -45,7 +47,34 @@ def get_engine(config: Config):
         return LazySMP(config)
     elif algorithm is Algorithm.random:
         return RandomEngine(config)
+    elif algorithm is Algorithm.nn:
+        return _create_nn_engine(config)
     raise Exception("algorithm not supported")
+
+
+def _default_nn_model_path() -> str | None:
+    """Resolve the default NNUE model path (bundled with the package)."""
+    model = Path(__file__).resolve().parent / "models" / "nnue_v1.npz"
+    if model.is_file():
+        return str(model)
+    return None
+
+
+def _create_nn_engine(config: Config) -> NNEngine:
+    """
+    Create an NN engine with the configured evaluator.
+
+    If nn_model_path is set, loads the model from that path.
+    Otherwise, looks for the bundled default model.
+    Falls back to classical evaluation if no model is found.
+    """
+    model_path = config.nn_model_path or _default_nn_model_path()
+    evaluator = None
+    if model_path:
+        from moonfish.evaluation.nn import NNUEEvaluator
+
+        evaluator = NNUEEvaluator(model_path)
+    return NNEngine(config, evaluator=evaluator)
 
 
 def _opening_book_path() -> str:
